@@ -189,6 +189,7 @@ def normalize_tilenumbers(in_x, in_y, z):
     width = 2**z
     return in_y * width + in_x
 
+
 def denormalize_tileid(tile_id, z):
     width = 2**z
     x = tile_id % width
