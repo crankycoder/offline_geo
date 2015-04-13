@@ -13,16 +13,28 @@ ZOOM_LEVEL = 17
 
 class PNPoly(object):
 
-    def __init__(self, pts):
+    def __init__(self, in_pts):
         '''
         We need to compute the dataset for metro toronto by taking
         the set of 4 points and computing the areas where BSSIDs are
         valid.
         '''
+        # Normalize lat/lon to only positive values
+        pts = []
+        for pt in in_pts:
+            lat, lon = pt
+            lat += 90
+            lon += 180
+            pt.append((lat, lon))
+
         self.vertx = [pt[1] for pt in pts]
         self.verty = [pt[0] for pt in pts]
 
-    def contains(self, lat, lon):
+    def contains(self, raw_lat, raw_lon):
+        # Normalize the lat/lon to use only positive values
+        lat = raw_lat + 90
+        lon = raw_lon + 180
+
         nvert = len(self.vertx)
         c = False
         i = 0
@@ -53,7 +65,7 @@ def compute_pnpoly_set(vertices):
                 writer.writerow((bssid, lat, lon))
 
 
-def pnpoly_to_to_tiles():
+def pnpoly_to_tiles():
     result = set()
     with open('pnpoly_tiles.csv', 'w') as f_out:
         writer = csv.writer(f_out)
@@ -165,6 +177,25 @@ def compute_tries():
     print "saved!"
 
 
+def normalize_tilenumbers(in_x, in_y, z):
+    """
+    Slippy tilenames are specified as having a maximum X or Y tile
+    number at 2^zoom-1.
+
+    So zoom level 18 has a maximum tile number of:
+    = 2^18-1
+    = 262143
+    """
+    width = 2**z
+    return in_y * width + in_x
+
+def denormalize_tileid(tile_id, z):
+    width = 2**z
+    x = tile_id % width
+    y = int(tile_id/width)
+    return x, y
+
+
 if __name__ == '__main__':
     # This set of points roughly contains the Metro toronto area
     v = [(43.754533, -79.631391),
@@ -175,10 +206,8 @@ if __name__ == '__main__':
     # BSSIDs should be duplicated to ~5% of all cells
     PERCENT_DUPE = 0.05
 
-    '''
     compute_pnpoly_set(v)
-    pnpoly_to_to_tiles()
-    '''
+    pnpoly_to_tiles()
     dupe_num = compute_dupe_num(PERCENT_DUPE)
     obfuscate_tile_data(dupe_num)
     compute_tries()
