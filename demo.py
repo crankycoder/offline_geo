@@ -105,6 +105,17 @@ def compute_dupe_num(pcnt, zoom):
 
     # Note that this is unstable as the unique set of tiles with BSSID
     # will grow over time.
+    # We want a unique set of tiles written out so that we can remap
+    # slippy tiles to just the set of tiles that actually exist.
+    # Let's say we want to have a map of all tiles. 
+    # At zoom level 17, each tile is ~305m x 305m.
+    # At zoom level 18, each tile is ~152m x 152m.
+    # So with Z17, we get sqrt(64k)*305 = 610km on each side of the
+    # map.
+    # With Z18, we get sqrt(64k)*152 = 38.9km on each side of the map.
+    # For reference, toronto is ~20km x 38.6km.  
+    # This means we can properly encode all of toronto within ~70% of
+    # the 16 bits. Lots of extra space!
     u_tiles = sorted(u_tiles)
     with open('unique_tile_ids_z%d.csv' % zoom, 'w') as fout:
         writer = csv.writer(fout)
