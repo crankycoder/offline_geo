@@ -4,7 +4,6 @@ import csv
 import math
 from scrambler import randint
 from marisa_trie import RecordTrie
-from itertools import chain
 
 # Typical tile size at zoom 17
 # http://c.tile.openstreetmap.org/17/36629/47838.png
@@ -96,13 +95,22 @@ def deg2num(lat_deg, lon_deg, zoom):
     return (xtile, ytile)
 
 
-def compute_dupe_num(pcnt):
+def compute_dupe_num(pcnt, zoom):
     u_tiles = set()
     for (bssid, tx, ty) in csv.reader(open('pnpoly_tiles.csv')):
         u_tiles.add((int(tx), int(ty)))
     # Just compute the list of (tilex, tiley) tuples
     u_tiles = list(u_tiles)
     MAX_IDX = len(u_tiles)-1
+
+    # Note that this is unstable as the unique set of tiles with BSSID
+    # will grow over time.
+    u_tiles = sorted(u_tiles)
+    with open('unique_tile_ids_z%d.csv' % zoom, 'w') as fout:
+        writer = csv.writer(fout)
+        for t in u_tiles:
+            writer.writerow(t)
+
     return int(pcnt * (MAX_IDX+1))
 
 
@@ -154,6 +162,11 @@ def obfuscate_tile_data(dupe_num):
 
 
 def compute_tries():
+    tile_map = {}
+    with open('unique_tile_ids_z%d.csv' % ZOOM_LEVEL, 'r') as fin:
+        reader = csv.reader(fin)
+        for i, (tx, ty) in enumerate(reader):
+            tile_map[(int(tx), int(ty))] = i
 
     dataset = {}
     with open('obfuscated.csv') as file_in:
@@ -166,13 +179,13 @@ def compute_tries():
             if bssid != last_bssid:
                 if last_bssid is not None:
                     # push bssid-locations into dataset
-                    dataset[last_bssid] = list(chain.from_iterable(bssid_locations))  # NOQA
-                bssid_locations = set()
+                    dataset[last_bssid] = bssid_locations  # NOQA
+                bssid_locations = []
                 if len(dataset) % 10000 == 0:
                     print len(dataset)
-            bssid_locations.add((int(x), int(y)))
+            bssid_locations.append(tile_map[(int(x), int(y))])
             last_bssid = bssid
-    trie = RecordTrie("<" + ("I" * len(bssid_locations)*2), dataset.items())
+    trie = RecordTrie("<" + ("I" * len(bssid_locations)), dataset.items())
     trie.save('toronto.record_trie')
     print "saved!"
 
@@ -207,8 +220,10 @@ if __name__ == '__main__':
     # BSSIDs should be duplicated to ~5% of all cells
     PERCENT_DUPE = 0.05
 
+    '''
     compute_pnpoly_set(v)
     pnpoly_to_tiles()
-    dupe_num = compute_dupe_num(PERCENT_DUPE)
+    dupe_num = compute_dupe_num(PERCENT_DUPE, ZOOM_LEVEL)
     obfuscate_tile_data(dupe_num)
+    '''
     compute_tries()
