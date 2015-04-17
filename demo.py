@@ -107,13 +107,13 @@ def compute_dupe_num(pcnt, zoom):
     # will grow over time.
     # We want a unique set of tiles written out so that we can remap
     # slippy tiles to just the set of tiles that actually exist.
-    # Let's say we want to have a map of all tiles. 
+    # Let's say we want to have a map of all tiles.
     # At zoom level 17, each tile is ~305m x 305m.
     # At zoom level 18, each tile is ~152m x 152m.
     # So with Z17, we get sqrt(64k)*305 = 610km on each side of the
     # map.
     # With Z18, we get sqrt(64k)*152 = 38.9km on each side of the map.
-    # For reference, toronto is ~20km x 38.6km.  
+    # For reference, toronto is ~20km x 38.6km.
     # This means we can properly encode all of toronto within ~70% of
     # the 16 bits. Lots of extra space!
     u_tiles = sorted(u_tiles)
@@ -172,7 +172,7 @@ def obfuscate_tile_data(dupe_num):
     return dupe_num
 
 
-def compute_tries():
+def compute_tries(fmt, output_fname):
     tile_map = {}
     with open('unique_tile_ids_z%d.csv' % ZOOM_LEVEL, 'r') as fin:
         reader = csv.reader(fin)
@@ -196,8 +196,8 @@ def compute_tries():
                     print len(dataset)
             bssid_locations.append(tile_map[(int(x), int(y))])
             last_bssid = bssid
-    trie = RecordTrie("<" + ("I" * len(bssid_locations)), dataset.items())
-    trie.save('toronto.record_trie')
+    trie = RecordTrie("<" + ("I" * dupe_num), dataset.items())
+    trie.save(output_fname)
     print "saved!"
 
 
@@ -221,6 +221,23 @@ def denormalize_tileid(tile_id, z):
     return x, y
 
 
+def test_offline_fix(fmt):
+    bssids = ['e8de2765e3f1',
+              '0a180a38877c']
+
+    t = RecordTrie(fmt).mmap('toronto.record_trie')
+
+    cur_results = None
+    for x in bssids:
+        tmpMatches = t.get(x)
+        if tmpMatches is not None and tmpMatches != []:
+            if cur_results is None:
+                cur_results = set(*tmpMatches)
+            else:
+                cur_results = cur_results.intersection(set(*tmpMatches))
+    return cur_results
+
+
 if __name__ == '__main__':
     # This set of points roughly contains the Metro toronto area
     v = [(43.754533, -79.631391),
@@ -231,10 +248,12 @@ if __name__ == '__main__':
     # BSSIDs should be duplicated to ~5% of all cells
     PERCENT_DUPE = 0.05
 
-    '''
-    compute_pnpoly_set(v)
-    pnpoly_to_tiles()
+    # compute_pnpoly_set(v)
+    # pnpoly_to_tiles()
     dupe_num = compute_dupe_num(PERCENT_DUPE, ZOOM_LEVEL)
-    obfuscate_tile_data(dupe_num)
-    '''
-    compute_tries()
+    fmt = "<" + ("I" * (dupe_num-1))
+
+    # obfuscate_tile_data(dupe_num)
+    # compute_tries(fmt, 'toronto.record_trie')
+
+    print test_offline_fix(fmt)
