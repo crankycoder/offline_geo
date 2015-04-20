@@ -4,10 +4,11 @@ import csv
 import math
 from scrambler import randint
 from marisa_trie import RecordTrie
+from matplotlib.path import Path
 
 # Typical tile size at zoom 17
 # http://c.tile.openstreetmap.org/17/36629/47838.png
-ZOOM_LEVEL = 17
+ZOOM_LEVEL = 20
 
 
 class PNPoly(object):
@@ -24,29 +25,16 @@ class PNPoly(object):
             lat, lon = pt
             lat += 90
             lon += 180
-            pt.append((lat, lon))
+            pts.append((lat, lon))
 
-        self.vertx = [pt[1] for pt in pts]
-        self.verty = [pt[0] for pt in pts]
+        codes = [Path.MOVETO] + [Path.LINETO] * (len(pts)-2) + [Path.CLOSEPOLY]
+        self.matplot_path = Path(pts, codes)
 
     def contains(self, raw_lat, raw_lon):
         # Normalize the lat/lon to use only positive values
         lat = raw_lat + 90
         lon = raw_lon + 180
-
-        nvert = len(self.vertx)
-        c = False
-        i = 0
-        j = nvert-1
-        while (i < nvert):
-            if (((self.verty[i] > lat) != (self.verty[j] > lat)) and
-               (lon < (self.vertx[j] - self.vertx[i]) *
-               (lat - self.verty[i]) /
-               (self.verty[j]-self.verty[i]) + self.vertx[i])):
-                c = not(c)
-            i += 1
-            j = i
-        return c
+        return self.matplot_path.contains_point((lat, lon))
 
 
 def compute_pnpoly_set(vertices):
@@ -57,11 +45,16 @@ def compute_pnpoly_set(vertices):
     rectangle).
     '''
     filter = PNPoly(vertices)
-    with open('pnpoly.csv', 'w') as fout:
-        writer = csv.writer(fout)
-        for (bssid, lat, lon) in csv.reader(open('input.csv')):
-            if filter.contains(float(lat), float(lon)):
-                writer.writerow((bssid, lat, lon))
+    with open('pnpoly_outside.csv', 'w') as fout_outsidepoly:
+        out_pnpoly_writer = csv.writer(fout_outsidepoly)
+        with open('pnpoly.csv', 'w') as fout:
+            writer = csv.writer(fout)
+
+            for (bssid, lat, lon) in csv.reader(open('input.csv')):
+                if filter.contains(float(lat), float(lon)):
+                    writer.writerow((bssid, lat, lon))
+                else:
+                    out_pnpoly_writer.writerow((bssid, lat, lon))
 
 
 def pnpoly_to_tiles():
@@ -172,7 +165,7 @@ def obfuscate_tile_data(dupe_num):
     return dupe_num
 
 
-def compute_tries(fmt, output_fname):
+def compute_tries(dupe_num, fmt, output_fname):
     tile_map = {}
     with open('unique_tile_ids_z%d.csv' % ZOOM_LEVEL, 'r') as fin:
         reader = csv.reader(fin)
@@ -196,7 +189,7 @@ def compute_tries(fmt, output_fname):
                     print len(dataset)
             bssid_locations.append(tile_map[(int(x), int(y))])
             last_bssid = bssid
-    trie = RecordTrie("<" + ("I" * dupe_num), dataset.items())
+    trie = RecordTrie("<" + ("I" * (dupe_num-1)), dataset.items())
     trie.save(output_fname)
     print "saved!"
 
@@ -240,20 +233,22 @@ def test_offline_fix(fmt):
 
 if __name__ == '__main__':
     # This set of points roughly contains the Metro toronto area
-    v = [(43.754533, -79.631391),
-         (43.855652, -79.170215),
-         (43.585491, -79.541599),
-         (43.585491, -79.170215)]
+    metro_toronto = [(43.754533, -79.631391),
+                     (43.855652, -79.170215),
+                     (43.585491, -79.541599),
+                     (43.585491, -79.170215)]
+
+    newmarket = [(44.012517, -79.498160),  # SW
+                 (44.067909, -79.512454),  # NW
+                 (44.088582, -79.421825),  # NE
+                 (44.031359, -79.409038)]  # SE
+    v = newmarket
 
     # BSSIDs should be duplicated to ~5% of all cells
     PERCENT_DUPE = 0.05
-
-    # compute_pnpoly_set(v)
-    # pnpoly_to_tiles()
+    compute_pnpoly_set(v)
+    pnpoly_to_tiles()
     dupe_num = compute_dupe_num(PERCENT_DUPE, ZOOM_LEVEL)
-    fmt = "<" + ("I" * (dupe_num-1))
-
-    # obfuscate_tile_data(dupe_num)
-    # compute_tries(fmt, 'toronto.record_trie')
-
-    print test_offline_fix(fmt)
+    fmt = "<" + ("I" * (dupe_num))
+    obfuscate_tile_data(dupe_num)
+    compute_tries(dupe_num, fmt, 'newmarket.record_trie')
