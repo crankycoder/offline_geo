@@ -131,12 +131,10 @@ def generate_ids(batch_size):
         real_tile_x = int(tx)
         real_tile_y = int(ty)
 
-        MIDDLE = randint(0, batch_size-2)
+        MIDDLE = randint(0, batch_size-1)
 
         randomized_set = set()
 
-        # TODO: this needs to build up the entire randomized dataset
-        # and fix uniques before
         while len(randomized_set) < MIDDLE:
             x, y = u_tiles[randint(0, MAX_IDX)]
             randomized_set.add((real_bssid, x, y))
@@ -144,10 +142,11 @@ def generate_ids(batch_size):
         # Return the real tile location
         randomized_set.add((real_bssid, real_tile_x, real_tile_y))
 
-        while len(randomized_set) < (batch_size-1):
+        while len(randomized_set) < (batch_size):
             x, y = u_tiles[randint(0, MAX_IDX)]
             randomized_set.add((real_bssid, x, y))
 
+        assert len(randomized_set) == batch_size
         for k in randomized_set:
             yield k
 
@@ -159,9 +158,9 @@ def obfuscate_tile_data(dupe_num):
         writer = csv.writer(fout)
         for i, row in enumerate(tile_gen):
             if i % 100000 == 0:
-                print "Processed %dk records" % (i / 1000)
+                print "Obfuscated %dk records" % (i / 1000)
             writer.writerow(row)
-        print "Processed %dk records" % (i / 1000)
+        print "Obfuscated %dk records" % (i / 1000)
     return dupe_num
 
 
@@ -186,12 +185,12 @@ def compute_tries(dupe_num, fmt, output_fname):
                     dataset[last_bssid] = bssid_locations  # NOQA
                 bssid_locations = []
                 if len(dataset) % 10000 == 0:
-                    print len(dataset)
+                    print "Writing obfuscated record: %d" % len(dataset)
             bssid_locations.append(tile_map[(int(x), int(y))])
             last_bssid = bssid
-    trie = RecordTrie("<" + ("I" * (dupe_num-1)), dataset.items())
+    trie = RecordTrie("<" + ("I" * dupe_num), dataset.items())
     trie.save(output_fname)
-    print "saved!"
+    print "obfuscated.csv saved!"
 
 
 def normalize_tilenumbers(in_x, in_y, z):
@@ -215,40 +214,54 @@ def denormalize_tileid(tile_id, z):
 
 
 def test_offline_fix(fmt):
-    bssids = ['e8de2765e3f1',
-              '0a180a38877c']
+    # verify that any three BSSIDs in the block should generate a
+    # valid hit.
+
+    # These BSSIDs are visible from the Moz Toronto office.
+    bssids = ['ccb255dd9fbe',
+              '68b6fc3fbe19',
+              '9094e439de3c',
+              'bc140152c7da',
+              '7444012ed618']
 
     t = RecordTrie(fmt).mmap('toronto.record_trie')
-
-    cur_results = None
-    for x in bssids:
-        tmpMatches = t.get(x)
-        if tmpMatches is not None and tmpMatches != []:
-            if cur_results is None:
-                cur_results = set(*tmpMatches)
-            else:
-                cur_results = cur_results.intersection(set(*tmpMatches))
-    return cur_results
+    for i in range(len(bssids)-2):
+        for j in range(i+1, len(bssids)-1):
+            for k in range(j+1, len(bssids)):
+                cur_results = None
+                for x in bssids[i], bssids[j], bssids[k]:
+                    tmpMatches = t.get(unicode(x))
+                    if tmpMatches is not None and tmpMatches != []:
+                        if cur_results is None:
+                            cur_results = set(*tmpMatches)
+                        else:
+                            cur_results = cur_results.intersection(set(*tmpMatches))
+                assert cur_results is not None and len(cur_results) == 1
+                assert 3917 in cur_results
+                print bssids[i], bssids[j], bssids[k] + " is ok"
 
 
 if __name__ == '__main__':
     # This set of points roughly contains the Metro toronto area
-    metro_toronto = [(43.754533, -79.631391),
-                     (43.855652, -79.170215),
-                     (43.585491, -79.541599),
-                     (43.585491, -79.170215)]
+    toronto = [(43.754533, -79.631391),
+               (43.855652, -79.170215),
+               (43.585491, -79.541599),
+               (43.585491, -79.170215)]
 
     newmarket = [(44.012517, -79.498160),  # SW
                  (44.067909, -79.512454),  # NW
                  (44.088582, -79.421825),  # NE
                  (44.031359, -79.409038)]  # SE
-    v = newmarket
+    v = toronto
 
-    # BSSIDs should be duplicated to ~5% of all cells
-    PERCENT_DUPE = 0.05
-    compute_pnpoly_set(v)
-    pnpoly_to_tiles()
-    dupe_num = compute_dupe_num(PERCENT_DUPE, ZOOM_LEVEL)
-    fmt = "<" + ("I" * (dupe_num))
-    obfuscate_tile_data(dupe_num)
-    compute_tries(dupe_num, fmt, 'newmarket.record_trie')
+    #compute_pnpoly_set(v)
+    #pnpoly_to_tiles()
+    #PERCENT_DUPE = 0.01
+    #dupe_num = compute_dupe_num(PERCENT_DUPE, ZOOM_LEVEL)
+    dupe_num = 100
+    fmt = "<" + ("I" * dupe_num)
+
+    #obfuscate_tile_data(dupe_num)
+    #compute_tries(dupe_num, fmt, 'toronto.record_trie')
+
+    test_offline_fix(fmt)
