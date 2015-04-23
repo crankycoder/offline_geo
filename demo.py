@@ -230,7 +230,7 @@ def test_offline_fix(fmt):
             for k in range(j+1, len(bssids)):
                 cur_results = None
                 for x in bssids[i], bssids[j], bssids[k]:
-                    tmpMatches = t.get(unicode(x))
+                    tmpMatches = t.get(x)
                     if tmpMatches is not None and tmpMatches != []:
                         if cur_results is None:
                             cur_results = set(*tmpMatches)
