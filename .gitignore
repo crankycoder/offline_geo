@@ -1,3 +1,4 @@
 *.pyc
 *.csv
 *.record_trie
+*.bytes_trie
