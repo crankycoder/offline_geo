@@ -6,10 +6,7 @@ from scrambler import randint
 from marisa_trie import RecordTrie
 from matplotlib.path import Path
 
-# Typical tile size at zoom 17
-# http://c.tile.openstreetmap.org/17/36629/47838.png
-ZOOM_LEVEL = 20
-
+ZOOM_LEVEL = 18
 
 class PNPoly(object):
 
@@ -69,6 +66,7 @@ def pnpoly_to_tiles():
                 tile_x, tile_y = deg2num(lat, lon, ZOOM_LEVEL)
                 entry = (bssid, tile_x, tile_y)
                 result.add(entry)
+                entry = (bssid, tile_x, tile_y, ZOOM_LEVEL)
                 writer.writerow(entry)
     return result
 
@@ -88,9 +86,9 @@ def deg2num(lat_deg, lon_deg, zoom):
     return (xtile, ytile)
 
 
-def compute_dupe_num(pcnt, zoom):
+def compute_unique_tileids(zoom):
     u_tiles = set()
-    for (bssid, tx, ty) in csv.reader(open('pnpoly_tiles.csv')):
+    for (bssid, tx, ty, ignore_z) in csv.reader(open('pnpoly_tiles.csv')):
         u_tiles.add((int(tx), int(ty)))
     # Just compute the list of (tilex, tiley) tuples
     u_tiles = list(u_tiles)
@@ -115,19 +113,17 @@ def compute_dupe_num(pcnt, zoom):
         for t in u_tiles:
             writer.writerow(t)
 
-    return int(pcnt * (MAX_IDX+1))
-
 
 def generate_ids(batch_size):
     u_tiles = set()
-    for (bssid, tx, ty) in csv.reader(open('pnpoly_tiles.csv')):
+    for (bssid, tx, ty, ignore_z) in csv.reader(open('pnpoly_tiles.csv')):
         u_tiles.add((int(tx), int(ty)))
 
     # Just compute the list of (tilex, tiley) tuples
     u_tiles = list(u_tiles)
     MAX_IDX = len(u_tiles)-1
 
-    for (real_bssid, tx, ty) in csv.reader(open('pnpoly_tiles.csv')):
+    for (real_bssid, tx, ty, ignore_z) in csv.reader(open('pnpoly_tiles.csv')):
         real_tile_x = int(tx)
         real_tile_y = int(ty)
 
@@ -224,6 +220,7 @@ def test_offline_fix(fmt):
               'bc140152c7da',
               '7444012ed618']
 
+    last_result = None
     t = RecordTrie(fmt).mmap('toronto.record_trie')
     for i in range(len(bssids)-2):
         for j in range(i+1, len(bssids)-1):
@@ -236,9 +233,17 @@ def test_offline_fix(fmt):
                             cur_results = set(*tmpMatches)
                         else:
                             cur_results = cur_results.intersection(set(*tmpMatches))
-                assert cur_results is not None and len(cur_results) == 1
-                assert 3917 in cur_results
+                if cur_results is None or len(cur_results) <> 1:
+                    print "Can't get fix with: %s %s %s" % (
+                            bssids[i],
+                            bssids[j],
+                            bssids[k],
+                            )
+                    continue
+                assert 1151 in cur_results
+                last_result = cur_results
                 print bssids[i], bssids[j], bssids[k] + " is ok"
+    print "Final results: " + str(last_result)
 
 
 if __name__ == '__main__':
@@ -256,10 +261,9 @@ if __name__ == '__main__':
 
     #compute_pnpoly_set(v)
     #pnpoly_to_tiles()
-    #PERCENT_DUPE = 0.01
-    #dupe_num = compute_dupe_num(PERCENT_DUPE, ZOOM_LEVEL)
+    #compute_unique_tileids(ZOOM_LEVEL)
     dupe_num = 100
-    fmt = "<" + ("I" * dupe_num)
+    fmt = "<" + ("i" * dupe_num)
 
     #obfuscate_tile_data(dupe_num)
     #compute_tries(dupe_num, fmt, 'toronto.record_trie')
