@@ -239,6 +239,7 @@ def test_offline_fix(fmt):
                             bssids[j],
                             bssids[k],
                             )
+                    print "Bad result size: %d" % len(cur_results)
                     continue
                 assert 1151 in cur_results
                 last_result = cur_results
