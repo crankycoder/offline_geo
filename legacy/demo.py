@@ -6,6 +6,8 @@ from scrambler import randint
 from marisa_trie import RecordTrie
 from matplotlib.path import Path
 
+# Never change this unless you've thought about it 97 times.
+# Then still never change it.
 ZOOM_LEVEL = 18
 
 class PNPoly(object):
