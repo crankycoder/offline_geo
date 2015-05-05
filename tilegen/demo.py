@@ -8,6 +8,7 @@ from marisa_trie import RecordTrie
 from matplotlib.path import Path
 from fileutil import file_len
 from geojson import load_path
+from tiler import generate_stream
 
 # bcrypt isn't used as it's *far* too slow to obfuscate 
 # the BSSID data.  In addition, we don't really get the 
@@ -150,75 +151,6 @@ def deg2num(lat_deg, lon_deg, zoom):
     ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 /
                 math.cos(lat_rad))) / math.pi) / 2.0 * n)
     return (xtile, ytile)
-
-
-def compute_unique_tileids(zoom):
-    u_tiles = set()
-    for (bssid, tx, ty, ignore_z) in csv.reader(open('pnpoly_tiles.csv')):
-        u_tiles.add((int(tx), int(ty)))
-    # Just compute the list of (tilex, tiley) tuples
-    u_tiles = list(u_tiles)
-    MAX_IDX = len(u_tiles)-1
-
-    # Note that this is unstable as the unique set of tiles with BSSID
-    # will grow over time.
-    # We want a unique set of tiles written out so that we can remap
-    # slippy tiles to just the set of tiles that actually exist.
-    # Let's say we want to have a map of all tiles.
-    # At zoom level 17, each tile is ~305m x 305m.
-    # At zoom level 18, each tile is ~152m x 152m.
-    # So with Z17, we get sqrt(64k)*305 = 610km on each side of the
-    # map.
-    # With Z18, we get sqrt(64k)*152 = 38.9km on each side of the map.
-    # For reference, toronto is ~20km x 38.6km.
-    # This means we can properly encode all of toronto within ~70% of
-    # the 16 bits. Lots of extra space!
-    u_tiles = sorted(u_tiles)
-    with open('unique_tile_ids_z%d.csv' % zoom, 'w') as fout:
-        writer = csv.writer(fout)
-        for t in u_tiles:
-            writer.writerow(t)
-
-
-def generate_ids(batch_size):
-    """
-    Compute all unique tiles.
-
-    This is no longer useful, but I've kept it here anyway as it's an
-    interesting metric.  It lets us see the proportion of tiles we
-    have with real measurements.
-    """
-
-    u_tiles = set()
-    for (bssid, tx, ty, ignore_z) in csv.reader(open('pnpoly_tiles.csv')):
-        u_tiles.add((int(tx), int(ty)))
-
-    # Just compute the list of (tilex, tiley) tuples
-    u_tiles = list(u_tiles)
-    MAX_IDX = len(u_tiles)-1
-
-    for (real_bssid, tx, ty, ignore_z) in csv.reader(open('pnpoly_tiles.csv')):
-        real_tile_x = int(tx)
-        real_tile_y = int(ty)
-
-        MIDDLE = randint(0, batch_size-1)
-
-        randomized_set = set()
-
-        while len(randomized_set) < MIDDLE:
-            x, y = u_tiles[randint(0, MAX_IDX)]
-            randomized_set.add((real_bssid, x, y))
-
-        # Return the real tile location
-        randomized_set.add((real_bssid, real_tile_x, real_tile_y))
-
-        while len(randomized_set) < (batch_size):
-            x, y = u_tiles[randint(0, MAX_IDX)]
-            randomized_set.add((real_bssid, x, y))
-
-        assert len(randomized_set) == batch_size
-        for k in randomized_set:
-            yield k
 
 
 def compute_all_tiles_in_polygon(polygon):
@@ -364,6 +296,34 @@ def test_offline_fix(fmt):
     print "Final results: " + str(last_result)
 
 
+def generate_sobol_csv(num_tiles):
+    """
+    generate a sobol sequence distributed over a range equal
+    to the the total length of incity_tiles.csv.  Sequence length
+    should be 10x the distribution width. write this out to 
+    sobol_seq.csv
+    """
+    with open('sobol_seq.csv','w') as fout:
+        generate_stream(fout, max_tilenum=num_tiles)
+    return file_len('sobol_seq.csv')
+
+
+def generate_bssid_sobol_keys(max_idx):
+    # Read in pnpoly_tiles.csv
+    # and write out `bssid_sobol_idx.csv` CSV file
+    # with BSSID -> index into sobol sequence CSV file
+    with open('bssid_sobol_idx.csv', 'w') as file_out:
+        writer = csv.writer(file_out)
+        with open('pnpoly_tiles.csv') as file_in:
+            reader = csv.reader(file_in)
+            for row in reader:
+                (bssid, tilex, tiley, zlevel) = row
+                sobol_idx = randint(0, max_idx-1)
+                r = (bssid, tilex, tiley, zlevel, sobol_idx)
+                writer.writerow(r)
+
+
+
 def hash_bssids():
     '''
     this takes in the bssid_sobol_idx.csv file and hashes all BSSIDs
@@ -393,10 +353,17 @@ if __name__ == '__main__':
 
     #compute_pnpoly_set(poly)
     #pnpoly_to_tiles()
-    compute_all_tiles_in_polygon(polygon)
+    #compute_all_tiles_in_polygon(polygon)
+
+
+    TOTAL_CITY_TILES = file_len('incity_tiles.csv')
 
     dupe_num = 100
-    fmt = "<" + ("i" * dupe_num)
+    fmt = "<" + ("i" * TOTAL_CITY_TILES)
+
+    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
+    
+    generate_bssid_sobol_keys(sobol_length)
 
     #hash_bssids()
     #obfuscate_tile_data(dupe_num)

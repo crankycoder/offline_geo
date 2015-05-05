@@ -10,7 +10,7 @@ from sobol import i4_uniform
 from numpy import bitwise_xor
 import csv
 
-def generate_stream(fout):
+def generate_stream(fout, seed=0, max_tilenum=0):
     """
     This generates a stable stream of quasi-random numbers and write
     it out to disk.  The idea is to use the list as a circular buffer.
@@ -27,19 +27,21 @@ def generate_stream(fout):
     # secret.  It's not critically important to maintain as a secret
     # as the i4_uniform function generates a new seed for every
     # iteration.
-    INITIAL_SEED = 1233441294
+    DEFAULT_INITIAL_SEED = 1233441294
 
     # We want to generate 100,000 numbers in the sequence
     SEQUENCE_LENGTH = 100000
 
-    # We want tiles to be uniformly distributed between tile 0 and
-    # tile 65,535.
+    DEFAULT_MAX_TILENUM = 65535
 
-    MAX_TILENUM = 65535
+    if max_tilenum == 0:
+        max_tilenum = DEFAULT_MAX_TILENUM
 
-    seed = INITIAL_SEED
+    if seed == 0:
+        seed = DEFAULT_INITIAL_SEED
+
     writer = csv.writer(fout)
     for test in xrange(0, SEQUENCE_LENGTH):
-        (i, seed) = i4_uniform (0, MAX_TILENUM, seed)
+        (i, seed) = i4_uniform (0, max_tilenum, seed)
         writer.writerow((i, seed))
     fout.flush()
