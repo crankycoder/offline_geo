@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
-import sys
-import csv
-import math
 from devrand import randint
-from marisa_trie import RecordTrie
-from matplotlib.path import Path
 from fileutil import file_len
 from geojson import load_path
+from marisa_trie import RecordTrie
+from matplotlib.path import Path
 from tiler import generate_stream
+import csv
+import math
+import os.path
+import sys
 
 # bcrypt isn't used as it's *far* too slow to obfuscate 
 # the BSSID data.  In addition, we don't really get the 
@@ -199,35 +200,70 @@ def compute_all_tiles_in_polygon(polygon):
 
 
 
-def obfuscate_tile_data(dupe_num):
+def obfuscate_tile_data(dupe_num, max_tile_id):
+    '''
+    1. load in the sobol sequence as a circular list.
+    2. Read in the sha256_bssid_sobol_idx.csv file to get
+       a (hashed bssid, tilex, tiley, zlevel, sobol idx)
+    3. keep the sobol idx as set it as the base index
+    4. read in dupe_num items from the circular list of sobol numbers
+       starting at the base index.
 
-    # TODO: load the sobol sequence file 
-    # and load it into a circular buffer
+    This is the tricky part.  We need to transform the sobol delta
+    into an offset so that we can 'rebase' the sobol sequence onto
+    the actual location of the tile.
+    5. for each sobol number:
+            a. delta = (new sobol - sobol base)
+            b. new_tile = sobol_seq[(base_idx+delta) % len(sobol_seq)] 
+    '''
+
+    print "Obscuring data now..."
+
     TOTAL_SOBOL_LENGTH = file_len('sobol_seq.csv')
-
     sobol_seq = []
     with open('sobol_seq.csv') as sobol_in:
         reader = csv.reader(sobol_in)
-        for rand_int, seed in reader:
-            sobol_seq.append((randint, seed))
+        for sobol_int, seed in reader:
+            sobol_seq.append((sobol_int, seed))
 
-    # TODO: read in pnpoly
+
+    ordered_city_tiles = []
+    with open('incity_tiles.csv') as file_in:
+        for row in csv.reader(file_in):
+            (tile_x, tile_y, zlevel) = row
+            (tile_x, tile_y, zlevel) = (int(tile_x), int(tile_y), int(zlevel))
+            ordered_city_tiles.append((tile_x, tile_y, zlevel))
+
+
+    obfuscated_count = 0
     with open('obfuscated.csv', 'w') as fout:
-        with open('sha256_bssid_sobol_idx.csv') as file_in:
+        writer = csv.writer(fout)
+        with open('bssid_sobol_idx.csv') as file_in:
             reader = csv.reader(file_in)
-            for row in reader:
-                (sha_bssid, tile_x, tile_y, zlevel, sobol_key) = row
-                sha_bssid_bytes = sha_bssid.decode("hex")
-                # Ok, no we read off the 'dupe_num' number of keys
-                # from the sobol sequence file
+            for row_idx, row in enumerate(reader):
+                (bssid, tile_x, tile_y, zlevel, sobol_key) = row
+
+                (bssid, tile_x, tile_y, zlevel, sobol_key) = (bssid,
+                        int(tile_x),
+                        int(tile_y),
+                        int(zlevel),
+                        int(sobol_key))
+
 
                 # Base sobol tile 
-                sobol_base_tileid = sobol_seq[sobol_key]
-                for idx in range(int(sobol_offset), int(sobol_offset) + dupe_num):
-                    offset_tile_id = sobol_seq[idx % TOTAL_SOBOL_LENGTH]
-                    sobol_offset = offset_tile_id - sobol_base_tile_id
+                sobol_base_tileid, _ignored = sobol_seq[sobol_key]
 
+                for i in range(dupe_num):
+                    (next_sobol_tile_id, next_sobol_seed) = sobol_seq[(sobol_key+i) % len(sobol_seq)]
+                    norm_tile_id = (int(next_sobol_tile_id) - int(sobol_base_tileid)) %  max_tile_id
 
+                    norm_tile_x, norm_tile_y, _ignored = ordered_city_tiles[norm_tile_id]
+                    r = (bssid, norm_tile_x, norm_tile_y, zlevel)
+
+                    writer.writerow(r)
+                    obfuscated_count += 1
+                    if obfuscated_count % 10000 == 0:
+                        print "Wrote %d rows of obfuscated data" % obfuscated_count
 
 def compute_tries(dupe_num, fmt, output_fname):
     tile_map = {}
@@ -304,7 +340,7 @@ def generate_sobol_csv(num_tiles):
     sobol_seq.csv
     """
     with open('sobol_seq.csv','w') as fout:
-        generate_stream(fout, max_tilenum=num_tiles)
+        generate_stream(fout, seed=1233441294, max_tilenum=num_tiles)
     return file_len('sobol_seq.csv')
 
 
@@ -312,6 +348,14 @@ def generate_bssid_sobol_keys(max_idx):
     # Read in pnpoly_tiles.csv
     # and write out `bssid_sobol_idx.csv` CSV file
     # with BSSID -> index into sobol sequence CSV file
+    #
+    # Note that the bssid_sobol_idx.csv file will have
+    # random numbers assigned into it so it's important
+    # to keep the bssid_sobol_idx.csv file around for the
+    # next iteration of the tile generation.
+    if os.path.isfile('bssid_sobol_idx.csv'):
+        raise RuntimeError("bssid_sobol_idx.csv already exists")
+
     with open('bssid_sobol_idx.csv', 'w') as file_out:
         writer = csv.writer(file_out)
         with open('pnpoly_tiles.csv') as file_in:
@@ -329,8 +373,11 @@ def hash_bssids():
     this takes in the bssid_sobol_idx.csv file and hashes all BSSIDs
     using sha256 to obscure what the original BSSID actually is.
     '''
+    raise RuntimeError("hashing is unsupported at this point")
     FILE_LEN = file_len('bssid_sobol_idx.csv')
     with open('bssid_sobol_idx.csv') as file_in:
+        #if os.path.isfile('sha256_bssid_sobol_idx.csv'):
+        #    raise RuntimeError("sha256_bssid_sobol_idx.csv already exists")
         with open('sha256_bssid_sobol_idx.csv', 'w') as file_out:
             writer = csv.writer(file_out)
             start = time.time()
@@ -361,11 +408,15 @@ if __name__ == '__main__':
     dupe_num = 100
     fmt = "<" + ("i" * TOTAL_CITY_TILES)
 
-    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
+    #sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
     
-    generate_bssid_sobol_keys(sobol_length)
+    # Skip this step as we already have the sobol keys
+    #generate_bssid_sobol_keys(sobol_length)
 
-    #hash_bssids()
-    #obfuscate_tile_data(dupe_num)
+    # TODO:
+    # Temporarily disabled as we can't figure out how to
+    # hash effectively.
+
+    obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
     #compute_tries(dupe_num, fmt, 'toronto.record_trie')
     #test_offline_fix(fmt)
