@@ -263,6 +263,7 @@ def compute_all_tiles_in_polygon(polygon):
                 if i % 100 == 0:
                     print "Processed %d out of %d tiles in polygon" % (i, total_tiles)
 
+    # TODO: i manually did `sort incity_tiles.csv > # # incity_tiles.csv.sorted`
 
 
 
