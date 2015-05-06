@@ -9,16 +9,6 @@ from tiler import generate_stream
 import csv
 import math
 import os.path
-import sys
-
-# bcrypt isn't used as it's *far* too slow to obfuscate 
-# the BSSID data.  In addition, we don't really get the 
-# security of bcrypt anyway as we need to use a single
-# salt per tile set.
-# import bcrypt
-
-from hashlib import sha256
-import time
 
 # TODO: this needs to get pulled out into a config file once we know
 # this methodology works.
@@ -27,6 +17,7 @@ SALT = '$2a$12$t.BjcCgX.UKVpHKfWnMM6u'
 # Never change this unless you've thought about it 97 times.
 # Then still never change it.
 ZOOM_LEVEL = 18
+
 
 class PNPoly(object):
 
@@ -79,8 +70,7 @@ class PNPoly(object):
         outside corners of this polygon.
         '''
         return (self._min_norm_lat-90, self._min_norm_lon-180), \
-                (self._max_norm_lat-90, self._max_norm_lon-180)
-
+               (self._max_norm_lat-90, self._max_norm_lon-180)
 
     def contains(self, raw_lat, raw_lon):
         # Normalize the lat/lon to use only positive values
@@ -96,14 +86,11 @@ def compute_pnpoly_set(polygon_filter):
     vertices. Note that the polygon *must* be convex (like a
     rectangle).
     '''
-    # TODO: need to sort the input.csv file first
     with open('pnpoly_outside.csv', 'w') as fout_outsidepoly:
         out_pnpoly_writer = csv.writer(fout_outsidepoly)
         with open('pnpoly.csv', 'w') as fout:
             writer = csv.writer(fout)
-            for i, (bssid, lat, lon) in enumerate(csv.reader(open('input.csv'))):
-                if i % 10 == 0:
-                    print "Processed %d records" % i
+            for (bssid, lat, lon) in csv.reader(open('input.csv')):
                 try:
                     if polygon_filter.contains(float(lat), float(lon)):
                         writer.writerow((bssid, lat, lon))
@@ -162,16 +149,13 @@ def compute_all_tiles_in_polygon(polygon):
 
     Compute the tile ID at each of the corners.
 
-    Interpolate between 4 corners to get a superset of all possible 
+    Interpolate between 4 corners to get a superset of all possible
     tiles.
 
     For each tile, we need to convert back into lat/long and compare
     against PNPoly.
     '''
     p1, p2 = polygon.bounding_box()
-    # TODO: compute tiles at each corner
-    # TODO: run nested loop over the whole box to determine which
-    # tiles are in 
 
     tx0, ty0 = deg2num(p1[0], p1[1], ZOOM_LEVEL)
     tx1, ty1 = deg2num(p2[0], p2[1], ZOOM_LEVEL)
@@ -179,13 +163,11 @@ def compute_all_tiles_in_polygon(polygon):
     # Now iterate over tx0 to tx1 at ty0
     i = 0
 
-
-    tiles_in_poly = []
     tx_tiles = sorted([tx0, tx1])
     ty_tiles = sorted([ty0, ty1])
     total_tiles = (tx_tiles[1]-tx_tiles[0]+1) * (ty_tiles[1]-ty_tiles[0]+1)
 
-    with open('incity_tiles.csv','w') as fout:
+    with open('incity_tiles.csv', 'w') as fout:
         writer = csv.writer(fout)
         for x in range(*tx_tiles):
             for y in range(*ty_tiles):
@@ -194,10 +176,64 @@ def compute_all_tiles_in_polygon(polygon):
                     writer.writerow((x, y, ZOOM_LEVEL))
                 i += 1
                 if i % 100 == 0:
-                    print "Processed %d out of %d tiles in polygon" % (i, total_tiles)
+                    msg = "Processed %d out of %d tiles in polygon"
+                    print msg % (i, total_tiles)
 
-    # TODO: i manually did `sort incity_tiles.csv > # # incity_tiles.csv.sorted`
 
+class OrderedCityTiles(object):
+    '''
+    This class provides acts like an order preserving
+    hashtable.
+
+    '''
+    def __init__(self):
+        self._hash = {}
+        self._hash_list = []
+
+    def __contains__(self, k):
+        if isinstance(k, tuple):
+            # Return the integer tile_id
+            return k in self._hash
+        raise RuntimeError("Invalid key: %s" % k)
+
+    def finalize(self):
+        # Sort the list of tiles in place and fix up all the
+        # hash keys
+
+        self._hash_list.sort()
+        for i, k in enumerate(self._hash_list):
+            self._hash[k] = i
+
+    def __getitem__(self, k):
+        '''
+        Enable fetching the item from the list interface
+        '''
+        # For indexed fetches into the list
+        if isinstance(k, int):
+            # Return the (tilex, tiley) tuple
+            return self._hash_list[k]
+        if isinstance(k, tuple):
+            # Return the integer tile_id
+            return self._hash[k]
+
+        raise RuntimeError("Invalid key: %s" % k)
+
+    def put(self, k):
+        '''
+        k must be the (tilex, tiley) co-ordinates where both tilex and
+        tiley are integers.
+        '''
+        assert isinstance(k, tuple)
+        assert len(k) == 2
+        assert isinstance(k[0], int)
+        assert isinstance(k[1], int)
+        assert k not in self._hash
+
+        self._hash_list.append(k)
+        self._hash[k] = len(self._hash_list)-1
+
+    def size(self):
+        return len(self._hash_list)
 
 
 def obfuscate_tile_data(dupe_num, max_tile_id):
@@ -214,26 +250,31 @@ def obfuscate_tile_data(dupe_num, max_tile_id):
     the actual location of the tile.
     5. for each sobol number:
             a. delta = (new sobol - sobol base)
-            b. new_tile = sobol_seq[(base_idx+delta) % len(sobol_seq)] 
+            b. new_tile = sobol_seq[(base_idx+delta) % len(sobol_seq)]
     '''
 
     print "Obscuring data now..."
 
-    TOTAL_SOBOL_LENGTH = file_len('sobol_seq.csv')
     sobol_seq = []
     with open('sobol_seq.csv') as sobol_in:
         reader = csv.reader(sobol_in)
         for sobol_int, seed in reader:
-            sobol_seq.append((sobol_int, seed))
+            sobol_seq.append((int(sobol_int), seed))
 
-
-    ordered_city_tiles = []
+    ordered_city_tiles = OrderedCityTiles()
     with open('incity_tiles.csv') as file_in:
         for row in csv.reader(file_in):
             (tile_x, tile_y, zlevel) = row
-            (tile_x, tile_y, zlevel) = (int(tile_x), int(tile_y), int(zlevel))
-            ordered_city_tiles.append((tile_x, tile_y, zlevel))
+            ordered_city_tiles.put((int(tile_x), int(tile_y)))
 
+    with open('pnpoly_tiles.csv') as file_in:
+        for row in csv.reader(file_in):
+            (bssid, tile_x, tile_y, zlevel) = row
+            k = (int(tile_x), int(tile_y))
+            if k not in ordered_city_tiles:
+                print "Adding extra tile: ", k
+                ordered_city_tiles.put(k)
+    ordered_city_tiles.finalize()
 
     obfuscated_count = 0
     with open('obfuscated.csv', 'w') as fout:
@@ -243,27 +284,45 @@ def obfuscate_tile_data(dupe_num, max_tile_id):
             for row_idx, row in enumerate(reader):
                 (bssid, tile_x, tile_y, zlevel, sobol_key) = row
 
-                (bssid, tile_x, tile_y, zlevel, sobol_key) = (bssid,
-                        int(tile_x),
-                        int(tile_y),
-                        int(zlevel),
-                        int(sobol_key))
+                (bssid,
+                 tile_x,
+                 tile_y,
+                 zlevel,
+                 sobol_key) = (bssid,
+                               int(tile_x),
+                               int(tile_y),
+                               int(zlevel),
+                               int(sobol_key))
 
+                # Ok, we need to get the key into the ordered tile
+                # list.
+                orig_tile_key = (tile_x, tile_y)
+                orig_tile_idx = ordered_city_tiles[orig_tile_key]
 
-                # Base sobol tile 
-                sobol_base_tileid, _ignored = sobol_seq[sobol_key]
+                # Base sobol tile
+                sobol_base_tile_id, _ignored = sobol_seq[sobol_key]
+
+                # We need the delta so that we can transform the sobol
+                # tile offsets and 'rebase' them onto the original
+                # tile tile index
+
+                tile_delta = orig_tile_idx - sobol_base_tile_id
 
                 for i in range(dupe_num):
                     (next_sobol_tile_id, next_sobol_seed) = sobol_seq[(sobol_key+i) % len(sobol_seq)]
-                    norm_tile_id = (int(next_sobol_tile_id) - int(sobol_base_tileid)) %  max_tile_id
 
-                    norm_tile_x, norm_tile_y, _ignored = ordered_city_tiles[norm_tile_id]
+                    # Note that for i = 0, this will be the original
+                    # tile id
+                    norm_tile_id = (tile_delta + next_sobol_tile_id) % ordered_city_tiles.size()
+
+                    norm_tile_x, norm_tile_y, = ordered_city_tiles[norm_tile_id]
                     r = (bssid, norm_tile_x, norm_tile_y, zlevel)
 
                     writer.writerow(r)
                     obfuscated_count += 1
                     if obfuscated_count % 10000 == 0:
                         print "Wrote %d rows of obfuscated data" % obfuscated_count
+
 
 def compute_tries(dupe_num, fmt, output_fname):
     tile_map = {}
@@ -318,12 +377,9 @@ def test_offline_fix(fmt):
                             cur_results = set(*tmpMatches)
                         else:
                             cur_results = cur_results.intersection(set(*tmpMatches))
-                if cur_results is None or len(cur_results) <> 1:
-                    print "Can't get fix with: %s %s %s" % (
-                            bssids[i],
-                            bssids[j],
-                            bssids[k],
-                            )
+                if cur_results is None or len(cur_results) != 1:
+                    msg = "Can't get fix with: %s %s %s"
+                    print msg % (bssids[i], bssids[j], bssids[k])
                     print "Bad result size: %d" % len(cur_results)
                     continue
                 assert 1151 in cur_results
@@ -336,10 +392,10 @@ def generate_sobol_csv(num_tiles):
     """
     generate a sobol sequence distributed over a range equal
     to the the total length of incity_tiles.csv.  Sequence length
-    should be 10x the distribution width. write this out to 
+    should be 10x the distribution width. write this out to
     sobol_seq.csv
     """
-    with open('sobol_seq.csv','w') as fout:
+    with open('sobol_seq.csv', 'w') as fout:
         generate_stream(fout, seed=1233441294, max_tilenum=num_tiles)
     return file_len('sobol_seq.csv')
 
@@ -367,56 +423,26 @@ def generate_bssid_sobol_keys(max_idx):
                 writer.writerow(r)
 
 
-
-def hash_bssids():
-    '''
-    this takes in the bssid_sobol_idx.csv file and hashes all BSSIDs
-    using sha256 to obscure what the original BSSID actually is.
-    '''
-    raise RuntimeError("hashing is unsupported at this point")
-    FILE_LEN = file_len('bssid_sobol_idx.csv')
-    with open('bssid_sobol_idx.csv') as file_in:
-        #if os.path.isfile('sha256_bssid_sobol_idx.csv'):
-        #    raise RuntimeError("sha256_bssid_sobol_idx.csv already exists")
-        with open('sha256_bssid_sobol_idx.csv', 'w') as file_out:
-            writer = csv.writer(file_out)
-            start = time.time()
-            for i, (bssid, tile_x, tile_y, z_level, sobol_idx) in enumerate(csv.reader(file_in)):
-                h = sha256(SALT + bssid)
-                hash_bssid = h.hexdigest()
-                if i % 5 == 0 and i != 0:
-                    now = time.time()
-                    rate = i/(now-start)
-                    msg = "Hashed %d BSSID. Rate is %0.3f BSSID/sec.  %0.2f seconds to go." 
-                    print msg % (i, rate, (FILE_LEN-i)/rate)
-                t = hash_bssid, tile_x, tile_y, z_level, sobol_idx
-                writer.writerow(t)
-
-
 if __name__ == '__main__':
     # This set of points roughly contains the Metro toronto area
     v = load_path('toronto.geojson')
     polygon = PNPoly(v)
 
-    #compute_pnpoly_set(poly)
-    #pnpoly_to_tiles()
-    #compute_all_tiles_in_polygon(polygon)
-
+    compute_pnpoly_set(polygon)
+    pnpoly_to_tiles()
+    compute_all_tiles_in_polygon(polygon)
 
     TOTAL_CITY_TILES = file_len('incity_tiles.csv')
 
     dupe_num = 100
     fmt = "<" + ("i" * TOTAL_CITY_TILES)
 
-    #sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
-    
-    # Skip this step as we already have the sobol keys
-    #generate_bssid_sobol_keys(sobol_length)
+    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
 
-    # TODO:
-    # Temporarily disabled as we can't figure out how to
-    # hash effectively.
+    # Skip this step as we already have the sobol keys
+    generate_bssid_sobol_keys(sobol_length)
 
     obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
-    #compute_tries(dupe_num, fmt, 'toronto.record_trie')
-    #test_offline_fix(fmt)
+
+    # compute_tries(dupe_num, fmt, 'toronto.record_trie')
+    # test_offline_fix(fmt)
