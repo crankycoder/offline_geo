@@ -236,6 +236,23 @@ class OrderedCityTiles(object):
         return len(self._hash_list)
 
 
+def load_city():
+    ordered_city_tiles = OrderedCityTiles()
+    with open('incity_tiles.csv') as file_in:
+        for row in csv.reader(file_in):
+            (tile_x, tile_y, zlevel) = row
+            ordered_city_tiles.put((int(tile_x), int(tile_y)))
+
+    with open('pnpoly_tiles.csv') as file_in:
+        for row in csv.reader(file_in):
+            (bssid, tile_x, tile_y, zlevel) = row
+            k = (int(tile_x), int(tile_y))
+            if k not in ordered_city_tiles:
+                print "Adding extra tile: ", k
+                ordered_city_tiles.put(k)
+    ordered_city_tiles.finalize()
+    return ordered_city_tiles
+
 def obfuscate_tile_data(dupe_num, max_tile_id):
     '''
     1. load in the sobol sequence as a circular list.
@@ -261,20 +278,7 @@ def obfuscate_tile_data(dupe_num, max_tile_id):
         for sobol_int, seed in reader:
             sobol_seq.append((int(sobol_int), seed))
 
-    ordered_city_tiles = OrderedCityTiles()
-    with open('incity_tiles.csv') as file_in:
-        for row in csv.reader(file_in):
-            (tile_x, tile_y, zlevel) = row
-            ordered_city_tiles.put((int(tile_x), int(tile_y)))
-
-    with open('pnpoly_tiles.csv') as file_in:
-        for row in csv.reader(file_in):
-            (bssid, tile_x, tile_y, zlevel) = row
-            k = (int(tile_x), int(tile_y))
-            if k not in ordered_city_tiles:
-                print "Adding extra tile: ", k
-                ordered_city_tiles.put(k)
-    ordered_city_tiles.finalize()
+    ordered_city_tiles = load_city()
 
     obfuscated_count = 0
     with open('obfuscated.csv', 'w') as fout:
@@ -325,11 +329,7 @@ def obfuscate_tile_data(dupe_num, max_tile_id):
 
 
 def compute_tries(dupe_num, fmt, output_fname):
-    tile_map = {}
-    with open('unique_tile_ids_z%d.csv' % ZOOM_LEVEL, 'r') as fin:
-        reader = csv.reader(fin)
-        for i, (tx, ty) in enumerate(reader):
-            tile_map[(int(tx), int(ty))] = i
+    ordered_city_tiles = load_city()
 
     dataset = {}
     with open('obfuscated.csv') as file_in:
@@ -337,52 +337,65 @@ def compute_tries(dupe_num, fmt, output_fname):
         last_bssid = None
         bssid_locations = None
         for row in reader:
-            bssid, x, y = row
+            bssid, tile_x, tile_y, zlevel = row
+
             bssid = unicode(bssid)
+            tile_key = (int(tile_x), int(tile_y))
+            tile_id = ordered_city_tiles[tile_key]
+
             if bssid != last_bssid:
                 if last_bssid is not None:
                     # push bssid-locations into dataset
-                    dataset[last_bssid] = bssid_locations  # NOQA
+                    dataset[last_bssid] = bssid_locations
                 bssid_locations = []
                 if len(dataset) % 10000 == 0:
-                    print "Writing obfuscated record: %d" % len(dataset)
-            bssid_locations.append(tile_map[(int(x), int(y))])
+                    print "Constructing trie with record: %d" % len(dataset)
+            bssid_locations.append(tile_id)
             last_bssid = bssid
+
+        # Copy the last batch into the dataset
+        if bssid_locations:
+            dataset[last_bssid] = bssid_locations
+            bssid_locations = []
+
+    print "Constructing trie"
     trie = RecordTrie("<" + ("I" * dupe_num), dataset.items())
     trie.save(output_fname)
-    print "obfuscated.csv saved!"
+    print "trie saved!"
 
+def load_trie(fmt):
+    return RecordTrie(fmt).mmap('toronto.record_trie')
 
 def test_offline_fix(fmt):
     # verify that any three BSSIDs in the block should generate a
     # valid hit.
 
+    t = load_trie(fmt)
+
     # These BSSIDs are visible from the Moz Toronto office.
-    bssids = ['ccb255dd9fbe',
+    bssids = ['ccb255dd9fbe',  # This an adjacent tile
               '68b6fc3fbe19',
-              '9094e439de3c',
               'bc140152c7da',
               '7444012ed618']
 
     last_result = None
-    t = RecordTrie(fmt).mmap('toronto.record_trie')
     for i in range(len(bssids)-2):
         for j in range(i+1, len(bssids)-1):
             for k in range(j+1, len(bssids)):
                 cur_results = None
                 for x in bssids[i], bssids[j], bssids[k]:
-                    tmpMatches = t.get(x)
+                    tmpMatches = t.get(x)[0]
                     if tmpMatches is not None and tmpMatches != []:
                         if cur_results is None:
-                            cur_results = set(*tmpMatches)
+                            cur_results = set(tmpMatches)
                         else:
-                            cur_results = cur_results.intersection(set(*tmpMatches))
+                            cur_results = cur_results.intersection(set(tmpMatches))
                 if cur_results is None or len(cur_results) != 1:
                     msg = "Can't get fix with: %s %s %s"
                     print msg % (bssids[i], bssids[j], bssids[k])
                     print "Bad result size: %d" % len(cur_results)
                     continue
-                assert 1151 in cur_results
+                assert 9752 in cur_results
                 last_result = cur_results
                 print bssids[i], bssids[j], bssids[k] + " is ok"
     print "Final results: " + str(last_result)
@@ -428,21 +441,21 @@ if __name__ == '__main__':
     v = load_path('toronto.geojson')
     polygon = PNPoly(v)
 
-    compute_pnpoly_set(polygon)
-    pnpoly_to_tiles()
-    compute_all_tiles_in_polygon(polygon)
+    #compute_pnpoly_set(polygon)
+    #pnpoly_to_tiles()
+    #compute_all_tiles_in_polygon(polygon)
 
-    TOTAL_CITY_TILES = file_len('incity_tiles.csv')
+    #TOTAL_CITY_TILES = file_len('incity_tiles.csv')
 
     dupe_num = 100
-    fmt = "<" + ("i" * TOTAL_CITY_TILES)
+    fmt = "<" + ("i" * dupe_num)
 
-    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
+    #sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
 
     # Skip this step as we already have the sobol keys
-    generate_bssid_sobol_keys(sobol_length)
+    #generate_bssid_sobol_keys(sobol_length)
 
-    obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
+    #obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
 
-    # compute_tries(dupe_num, fmt, 'toronto.record_trie')
-    # test_offline_fix(fmt)
+    #compute_tries(dupe_num, fmt, 'toronto.record_trie')
+    test_offline_fix(fmt)
