@@ -15,13 +15,19 @@ ex row:
 import sys
 import csv
 
+bssid_set = set()
 with open('wifi_toronto_clean.csv', 'w') as fout:
     writer = csv.writer(fout)
     for i, row in enumerate(csv.reader(open('toronto.csv'), delimiter='\t')):
         try:
             float(row[1])
             float(row[2])
-            if len(row[0].strip()) != 16:
+            bssid = row[0].strip()
+            if len(bssid) == 12:
+                if bssid in bssid_set:
+                    print "already have : %s" % bssid
+                    continue
+                bssid_set.add(bssid)
                 writer.writerow((row[0], row[1], row[2]))
         except:
             e = sys.exc_info()[0]
