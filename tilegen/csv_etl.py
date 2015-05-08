@@ -16,9 +16,9 @@ import sys
 import csv
 
 bssid_set = set()
-with open('wifi_toronto_clean.csv', 'w') as fout:
+with open('input.csv', 'w') as fout:
     writer = csv.writer(fout)
-    for i, row in enumerate(csv.reader(open('toronto.csv'), delimiter='\t')):
+    for i, row in enumerate(csv.reader(open('input_raw.csv'), delimiter='\t')):
         try:
             float(row[1])
             float(row[2])

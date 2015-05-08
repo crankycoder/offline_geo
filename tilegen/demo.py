@@ -438,24 +438,24 @@ def generate_bssid_sobol_keys(max_idx):
 
 if __name__ == '__main__':
     # This set of points roughly contains the Metro toronto area
-    v = load_path('toronto.geojson')
+    v = load_path('input.geojson')
     polygon = PNPoly(v)
 
-    #compute_pnpoly_set(polygon)
-    #pnpoly_to_tiles()
-    #compute_all_tiles_in_polygon(polygon)
+    compute_pnpoly_set(polygon)
+    pnpoly_to_tiles()
+    compute_all_tiles_in_polygon(polygon)
 
-    #TOTAL_CITY_TILES = file_len('incity_tiles.csv')
+    TOTAL_CITY_TILES = file_len('incity_tiles.csv')
 
     dupe_num = 100
     fmt = "<" + ("i" * dupe_num)
 
-    #sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
+    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
 
     # Skip this step as we already have the sobol keys
-    #generate_bssid_sobol_keys(sobol_length)
+    generate_bssid_sobol_keys(sobol_length)
 
-    #obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
+    obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
 
-    #compute_tries(dupe_num, fmt, 'toronto.record_trie')
-    test_offline_fix(fmt)
+    compute_tries(dupe_num, fmt, 'newmarket.record_trie')
+    #test_offline_fix(fmt)
