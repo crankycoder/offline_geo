@@ -426,13 +426,14 @@ def test_offline_fix(fmt):
         if v == max_tilept:
             maxpt_tileset.add(i)
 
+    city_tiles = load_city()
     if len(maxpt_tileset) == 1:
-        print "Final results: " + str(maxpt_tileset)
+        print "Unique solution found: " + str(maxpt_tileset)
     else:
         # We have to solve a tie breaker
-        # Multiple by 5 to weight trie matches heavily
+        # Square the points for the max point array
         for pt in maxpt_tileset:
-            tile_points[pt] *= 5
+            tile_points[pt] *= tile_points[pt]
 
         print "Tie breaker with score: [%d]! Highest scoring tiles: %s" % (max_tilept, str(maxpt_tileset))
 
@@ -441,7 +442,9 @@ def test_offline_fix(fmt):
             for adjacent_tileid in adjacent_tile(tile):
                 new_pts = tile_points[adjacent_tileid]
                 new_pts *= new_pts
-                print "Adding %d points to tile: %d" % (new_pts, tile)
+
+                msg = "Adding %d points from [%s] to tile: %s(%d)" 
+                print msg % (new_pts, city_tiles[adjacent_tileid], city_tiles[tile], tile)
                 tile_points[tile] += new_pts
 
         max_tilept = max(tile_points)
@@ -505,7 +508,6 @@ def generate_bssid_sobol_keys(max_idx):
 
 if __name__ == '__main__':
     # This set of points roughly contains the Metro toronto area
-    """
     v = load_path('input.geojson')
     polygon = PNPoly(v)
 
@@ -514,19 +516,15 @@ if __name__ == '__main__':
     compute_all_tiles_in_polygon(polygon)
 
     TOTAL_CITY_TILES = file_len('incity_tiles.csv')
-    """
 
-    dupe_num = 50
+    dupe_num = 100
     fmt = "<" + ("i" * dupe_num)
 
-    """
     sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
 
     # Skip this step as we already have the sobol keys
     generate_bssid_sobol_keys(sobol_length)
     obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
 
-    compute_tries(dupe_num, fmt, 'newmarket.record_trie')
-
-    """
+    compute_tries(dupe_num, fmt, 'offline.record_trie')
     test_offline_fix(fmt)
