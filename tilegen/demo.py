@@ -204,6 +204,12 @@ class OrderedCityTiles(object):
         for i, k in enumerate(self._hash_list):
             self._hash[k] = i
 
+        with open('ordered_city.csv', 'w') as fout:
+            writer = csv.writer(fout)
+            for item in self._hash_list:
+                writer.writerow(item)
+
+
     def __getitem__(self, k):
         '''
         Enable fetching the item from the list interface
@@ -248,7 +254,7 @@ def load_city():
             (bssid, tile_x, tile_y, zlevel) = row
             k = (int(tile_x), int(tile_y))
             if k not in ordered_city_tiles:
-                print "Adding extra tile: ", k
+                #print "Adding extra tile: ", k
                 ordered_city_tiles.put(k)
     ordered_city_tiles.finalize()
     return ordered_city_tiles
@@ -364,41 +370,102 @@ def compute_tries(dupe_num, fmt, output_fname):
     print "trie saved!"
 
 def load_trie(fmt):
-    return RecordTrie(fmt).mmap('toronto.record_trie')
+    return RecordTrie(fmt).mmap('offline.record_trie')
 
 def test_offline_fix(fmt):
-    # verify that any three BSSIDs in the block should generate a
-    # valid hit.
+    """
+    Setup an array of small integers (8bit) to map to all possible
+    tiles (64k).
+
+    Fetch all set results from the trie for each found BSSID and
+    add 1 point to the array index for each location.
+
+    When all BSSIDs have been exhausted, scan the array. For every
+    index where we have 2 or more points, we want to weight those
+    matches heavily - so multiply the value by 5 and overwrite the
+    index value.
+
+    We also want to assign points for adjacent tiles where we have a
+    score > 10 (2 tries agree).
+
+    Using the lookup from load_city, find all adjacent tiles and sum
+    up the surrounding points and add them into a *second* array to
+    avoid double counting.
+
+    Add the values from the second array into the first array.
+
+    Find the index with the maximum value. For ties, return the first
+    match.
+    """
 
     t = load_trie(fmt)
 
+    tile_points = [0] * 65535
+
     # These BSSIDs are visible from the Moz Toronto office.
-    bssids = ['ccb255dd9fbe',  # This an adjacent tile
-              '68b6fc3fbe19',
-              'bc140152c7da',
-              '7444012ed618']
+    bssids = ['001e52f575fa', '0023516416d9', '1caff7d4fba5',
+              '28285d56ea4f', '386077f437b1', '3a6077f437b2', '40f201e772e9',
+              '788df7b3e0a8', '788df7e3a7d8', 'c891f9be906e', 'e03f4998a6a0',
+              'e03f4998a6a4']
 
     last_result = None
-    for i in range(len(bssids)-2):
-        for j in range(i+1, len(bssids)-1):
-            for k in range(j+1, len(bssids)):
-                cur_results = None
-                for x in bssids[i], bssids[j], bssids[k]:
-                    tmpMatches = t.get(x)[0]
-                    if tmpMatches is not None and tmpMatches != []:
-                        if cur_results is None:
-                            cur_results = set(tmpMatches)
-                        else:
-                            cur_results = cur_results.intersection(set(tmpMatches))
-                if cur_results is None or len(cur_results) != 1:
-                    msg = "Can't get fix with: %s %s %s"
-                    print msg % (bssids[i], bssids[j], bssids[k])
-                    print "Bad result size: %d" % len(cur_results)
-                    continue
-                assert 9752 in cur_results
-                last_result = cur_results
-                print bssids[i], bssids[j], bssids[k] + " is ok"
-    print "Final results: " + str(last_result)
+    for bssid in bssids:
+        matchContainer = t.get(bssid)
+        if matchContainer is None:
+            print "BSSID [%s] is not in the dataset" % bssid
+            continue
+        for pt in matchContainer[0]:
+            tile_points[pt] += 1
+
+    max_tilept = max(tile_points)
+    if max_tilept <= 1:
+        print "Can't find any solution to this set of BSSIDS"
+
+    maxpt_tileset = set()
+    for i, v in enumerate(tile_points):
+        if v == max_tilept:
+            maxpt_tileset.add(i)
+
+    if len(maxpt_tileset) == 1:
+        print "Final results: " + str(maxpt_tileset)
+    else:
+        # We have to solve a tie breaker
+        # Multiple by 5 to weight trie matches heavily
+        for pt in maxpt_tileset:
+            tile_points[pt] *= 5
+
+        print "Tie breaker with score: [%d]! Highest scoring tiles: %s" % (max_tilept, str(maxpt_tileset))
+
+        for tile in maxpt_tileset:
+            # For each adjacent tile, add points into the center
+            for adjacent_tileid in adjacent_tile(tile):
+                new_pts = tile_points[adjacent_tileid]
+                new_pts *= new_pts
+                print "Adding %d points to tile: %d" % (new_pts, tile)
+                tile_points[tile] += new_pts
+
+        max_tilept = max(tile_points)
+        maxpt_tileset = set()
+        for i, v in enumerate(tile_points):
+            if v == max_tilept:
+                maxpt_tileset.add(i)
+        print "Tie breaking solution: %s" % str(maxpt_tileset)
+
+
+def adjacent_tile(tile_id):
+    city_tiles = load_city()
+    tx, ty = city_tiles[tile_id]
+
+    yield city_tiles[(tx-1, ty-1)]
+    yield city_tiles[(tx  , ty-1)]
+    yield city_tiles[(tx+1, ty-1)]
+
+    yield city_tiles[(tx-1, ty)]
+    yield city_tiles[(tx+1, ty)]
+
+    yield city_tiles[(tx-1, ty+1)]
+    yield city_tiles[(tx  , ty+1)]
+    yield city_tiles[(tx+1, ty+1)]
 
 
 def generate_sobol_csv(num_tiles):
@@ -438,6 +505,7 @@ def generate_bssid_sobol_keys(max_idx):
 
 if __name__ == '__main__':
     # This set of points roughly contains the Metro toronto area
+    """
     v = load_path('input.geojson')
     polygon = PNPoly(v)
 
@@ -446,16 +514,19 @@ if __name__ == '__main__':
     compute_all_tiles_in_polygon(polygon)
 
     TOTAL_CITY_TILES = file_len('incity_tiles.csv')
+    """
 
-    dupe_num = 100
+    dupe_num = 50
     fmt = "<" + ("i" * dupe_num)
 
+    """
     sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
 
     # Skip this step as we already have the sobol keys
     generate_bssid_sobol_keys(sobol_length)
-
     obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
 
     compute_tries(dupe_num, fmt, 'newmarket.record_trie')
-    #test_offline_fix(fmt)
+
+    """
+    test_offline_fix(fmt)
