@@ -186,9 +186,16 @@ class OrderedCityTiles(object):
     hashtable.
 
     '''
-    def __init__(self):
+    def __init__(self, load_fromdisk=False):
         self._hash = {}
         self._hash_list = []
+        if load_fromdisk:
+            with open('ordered_city.csv') as fin:
+                reader = csv.reader(fin)
+                for row in reader:
+                    t = (int(row[0].strip()), int(row[1].strip()))
+                    self._hash_list.append(t)
+                    self._hash[t] = len(self._hash_list) - 1
 
     def __contains__(self, k):
         if isinstance(k, tuple):
@@ -402,7 +409,7 @@ def test_offline_fix(fmt):
 
     tile_points = [0] * 65535
 
-    # These BSSIDs are visible from the Moz Toronto office.
+    # These BSSIDs are visible in Newmarket near Vic's house
     bssids = ['001e52f575fa', '0023516416d9', '1caff7d4fba5',
               '28285d56ea4f', '386077f437b1', '3a6077f437b2', '40f201e772e9',
               '788df7b3e0a8', '788df7e3a7d8', 'c891f9be906e', 'e03f4998a6a0',
@@ -435,7 +442,8 @@ def test_offline_fix(fmt):
         for pt in maxpt_tileset:
             tile_points[pt] *= tile_points[pt]
 
-        print "Tie breaker with score: [%d]! Highest scoring tiles: %s" % (max_tilept, str(maxpt_tileset))
+        msg = "Tie breaker with score: [%d]! Highest scoring tiles: %s"
+        print msg % (max_tilept, str(maxpt_tileset))
 
         for tile in maxpt_tileset:
             # For each adjacent tile, add points into the center
@@ -527,4 +535,4 @@ if __name__ == '__main__':
     obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
 
     compute_tries(dupe_num, fmt, 'offline.record_trie')
-    test_offline_fix(fmt)
+    #test_offline_fix(fmt)
