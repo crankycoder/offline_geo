@@ -82,6 +82,7 @@ def offline_fix(fmt):
 
         msg = "Tie breaker with score: [%d]! Highest scoring tiles: %s"
         print msg % (max_tilept, str(maxpt_tileset))
+        print "Adjusted score is: %d" % (max_tilept*max_tilept)
 
         adj_tile_points = {}
 
@@ -89,7 +90,6 @@ def offline_fix(fmt):
             # For each adjacent tile, add points into the center
             for adjacent_tileid in adjacent_tile(tile):
                 new_pts = tile_points[adjacent_tileid]
-                new_pts *= new_pts
 
                 msg = "Adding %d points from [%s](%d) to tile: %s(%d)"
                 print msg % (new_pts,
