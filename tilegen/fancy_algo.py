@@ -61,7 +61,8 @@ def offline_fix(fmt):
 
     max_tilept = max(tile_points)
     if max_tilept <= 1:
-        print "Can't find any solution to this set of BSSIDS"
+        print "No tries agreed on a solution"
+        return
 
     maxpt_tileset = set()
     for i, v in enumerate(tile_points):
@@ -82,22 +83,57 @@ def offline_fix(fmt):
         msg = "Tie breaker with score: [%d]! Highest scoring tiles: %s"
         print msg % (max_tilept, str(maxpt_tileset))
 
+        adj_tile_points = {}
+
         for tile in maxpt_tileset:
             # For each adjacent tile, add points into the center
             for adjacent_tileid in adjacent_tile(tile):
                 new_pts = tile_points[adjacent_tileid]
                 new_pts *= new_pts
 
-                msg = "Adding %d points from [%s] to tile: %s(%d)" 
-                print msg % (new_pts, city_tiles[adjacent_tileid], city_tiles[tile], tile)
-                tile_points[tile] += new_pts
+                msg = "Adding %d points from [%s](%d) to tile: %s(%d)"
+                print msg % (new_pts,
+                        city_tiles[adjacent_tileid],
+                        adjacent_tileid,
+                        city_tiles[tile],
+                        tile)
+                adj_tile_points[tile] = adj_tile_points.get(tile, 0)
+                adj_tile_points[tile] += new_pts
+
+        for k, v in adj_tile_points.items():
+            tile_points[k] += v
 
         max_tilept = max(tile_points)
         maxpt_tileset = set()
         for i, v in enumerate(tile_points):
             if v == max_tilept:
                 maxpt_tileset.add(i)
-        print "Tie breaking solution: %s" % str(maxpt_tileset)
+
+        if len(maxpt_tileset) == 1:
+            print "Tie breaking solution: %s" % str(maxpt_tileset)
+        else:
+            msg = "Multiple solutions: "
+            print msg + maxpt_tileset
+
+            tiebreaking_set = set()
+            maxpt_tilelist = list(maxpt_tileset)
+            for i, pt in enumerate(maxpt_tilelist):
+                adjacent_tilelist = list(adjacent_tile(pt))
+                adjacent_tileset = set(adjacent_tilelist) & set(maxpt_tilelist[i+1:])
+                if adjacent_tileset:
+                    tiebreaking_set.add(pt)
+                    tiebreaking_set = tiebreaking_set.union(pt)
+
+            final_lat = 0
+            final_lon = 0
+            for tie in tiebreaking_set:
+                tx, ty = city_tiles[tie]
+                tmp_lat, tmp_lon = num2deg(tx, ty, ZOOM_LEVEL)
+                final_lat += (tmp_lat * 1.0/len(tiebreaking_set))
+                final_lon += (tmp_lon * 1.0/len(tiebreaking_set))
+
+            msg = "Multiple solutions converging on : " + (final_lat, final_lon)
+            # TODO: maybe add adjacent signals to the final solution
 
 
 def extra_info(city_tiles, center_pt, center_height, tile_points):
@@ -117,7 +153,6 @@ def extra_info(city_tiles, center_pt, center_height, tile_points):
             weighted_lat_lon.append((adj_pts, (lat, lon)))
 
     # Now compute a new center
-    weighted_lat_lon.append((adj_pts, (lat, lon)))
     w_lat = 0
     w_lon = 0
     for (adj_pts, (lat, lon)) in weighted_lat_lon:
@@ -128,15 +163,12 @@ def extra_info(city_tiles, center_pt, center_height, tile_points):
     w_lon /= shift_weight
     print "Adjacent wlat/wlon: %f, %f" % (w_lat, w_lon)
 
-    #n_lat = (c_lat * center_height + w_lat * shift_weight) / (center_height + shift_weight)
-    #n_lon = (c_lon * center_height + w_lon * shift_weight) / (center_height + shift_weight)
 
     # No need to be overly smart here.  Just use 50% real fix, 50%
     # weighted adjusted location.
     n_lat = (c_lat * 0.5 + w_lat * 0.5)
     n_lon = (c_lon * 0.5 + w_lon * 0.5)
 
-    print "Center Height : %d  Shift Weight: %d" % (center_height, shift_weight)
     print "Recomputed lat/lon: %f, %f" % (n_lat, n_lon)
 
 

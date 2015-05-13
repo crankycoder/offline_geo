@@ -427,6 +427,7 @@ def test_offline_fix(fmt):
     max_tilept = max(tile_points)
     if max_tilept <= 1:
         print "Can't find any solution to this set of BSSIDS"
+        return
 
     maxpt_tileset = set()
     for i, v in enumerate(tile_points):
@@ -515,24 +516,26 @@ def generate_bssid_sobol_keys(max_idx):
 
 
 if __name__ == '__main__':
+    pass
     # This set of points roughly contains the Metro toronto area
-    v = load_path('input.geojson')
-    polygon = PNPoly(v)
-
-    compute_pnpoly_set(polygon)
-    pnpoly_to_tiles()
-    compute_all_tiles_in_polygon(polygon)
-
-    TOTAL_CITY_TILES = file_len('incity_tiles.csv')
-
-    dupe_num = 100
-    fmt = "<" + ("i" * dupe_num)
-
-    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
-
-    # Skip this step as we already have the sobol keys
-    generate_bssid_sobol_keys(sobol_length)
-    obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
-
-    compute_tries(dupe_num, fmt, 'offline.record_trie')
+    #    v = load_path('input.geojson')
+    #    polygon = PNPoly(v)
+    #
+    #    compute_pnpoly_set(polygon)
+    #    pnpoly_to_tiles()
+    #    compute_all_tiles_in_polygon(polygon)
+    #
+    #    TOTAL_CITY_TILES = file_len('incity_tiles.csv')
+    #
+    #    dupe_num = 100
+    #    fmt = "<" + ("i" * dupe_num)
+    #
+    #    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
+    #
+    #    # Skip this step as we already have the sobol keys
+    #    generate_bssid_sobol_keys(sobol_length)
+    #    obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
+    #
+    #    compute_tries(dupe_num, fmt, 'offline.record_trie')
     #test_offline_fix(fmt)
+
