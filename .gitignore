@@ -2,3 +2,8 @@
 *.csv
 *.record_trie
 *.bytes_trie
+
+*.geojson
+*.bssid
+
+toronto_bssid*.txt

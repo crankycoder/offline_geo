@@ -1,23 +1,13 @@
-from demo import num2deg, ZOOM_LEVEL
+from demo import num2deg
+from fixture_loader import fetch_bssids
+import math
+from marisa_trie import RecordTrie
+from demo import OrderedCityTiles
 
-def load_city():
-    from demo import OrderedCityTiles
-    return OrderedCityTiles(load_fromdisk=True)
 
 
-def fetch_bssids():
-    bssids = []
-    for line in open('toronto.bssid'):
-        bssid = line.strip()
-        if len(bssid) == 12:
-            bssids.append(bssid)
-    return bssids
 
-def load_trie(fmt):
-    from marisa_trie import RecordTrie
-    return RecordTrie(fmt).mmap('offline.record_trie')
-
-def offline_fix(fmt):
+def offline_fix(dupe_num):
     """
     Setup an array of small integers (8bit) to map to all possible
     tiles (64k).
@@ -43,12 +33,12 @@ def offline_fix(fmt):
     match.
     """
 
-    t = load_trie(fmt)
+    fixer = LocationFixer(dupe_num)
 
     tile_points = [0] * 65535
 
     # These BSSIDs are visible in Newmarket near Vic's house
-    bssids = fetch_bssids()
+    bssids = fetch_bssids('toronto.bssid')
 
     last_result = None
     for bssid in bssids:
@@ -72,7 +62,7 @@ def offline_fix(fmt):
     city_tiles = load_city()
     if len(maxpt_tileset) == 1:
         print "Unique solution found: " + str(maxpt_tileset)
-        extra_info(city_tiles, list(maxpt_tileset)[0], max_tilept, tile_points)
+        adjust_center_with_adjacent_wifi(city_tiles, list(maxpt_tileset)[0], max_tilept, tile_points)
         return
     else:
         # We have to solve a tie breaker
@@ -136,7 +126,7 @@ def offline_fix(fmt):
             # TODO: maybe add adjacent signals to the final solution
 
 
-def extra_info(city_tiles, center_pt, center_height, tile_points):
+def adjust_center_with_adjacent_wifi(city_tiles, center_pt, center_height, tile_points):
     tx, ty = city_tiles[center_pt]
     c_lat, c_lon = num2deg(tx, ty, ZOOM_LEVEL)
     print "Center is at: %f, %f" % (c_lat, c_lon)
@@ -190,10 +180,89 @@ def adjacent_tile(tile_id):
     yield city_tiles[(tx+1, ty+1)]
 
 
-def fancy_fix():
-    dupe_num = 100
-    fmt = "<" + ("i" * dupe_num)
-    offline_fix(fmt)
+class LocationFixer(object):
+    """
+    This class provides location fixes for a particular
+    city.
+    """
+    def __init__(self, dupe_num, trie_filename='offline.record_trie')
+        self.dupe_num = dupe_num
+        self.fmt = "<" + ("i" * self.dupe_num)
+        self.trie_filename = trie_filename
+        self.offline_trie = RecordTrie(self.fmt).mmap(self.trie_filename)
 
-if __name__ == '__main__':
-    fancy_fix()
+        self.city_tiles = OrderedCityTiles(load_fromdisk=True)
+
+        # TODO: fill in strategies
+        self.strategies = []
+
+    def find_solution(self, fixTime, bssids):
+        '''
+        Try to find a location fix given a time stamp and the BSSIDs
+        that were collected at that time.
+
+        The timestamp is not precise and is considered accurate to within 1
+        minute.
+        '''
+
+        result = LocationSolution(self.offline_trie, fixTime, bssids)
+        prev_strategy = None
+        for strategy in self.strategies:
+            result = strategy(self, prev_strategy, result)
+
+class LocationSolution(object):
+    """
+    A LocationSolution is the object that is passed into a chain of 
+    strategies to determine a location fix.
+
+    A lat_lon value of None indicates no possible solution has been found.
+    """
+    def __init__(self, trie, fix_time, bssids):
+        self.trie = trie
+        self.fixTime = fix_time
+        self.bssids = bssids
+
+        self.fix_tileset = None
+
+
+class SmartTile(object):
+    """
+    A convenience class to convert to and from slippy tile
+    co-ordinates and lat/lon.
+    """
+    ZOOM_LEVEL = 18
+
+    @classmethod
+    def fromLatLon(cls, lat, lon):
+        xtile, ytile = SmartTile.deg2num(lat, lon, self.ZOOM_LEVEL)
+        return SmartTile(xtile, ytile)
+
+    @classmethod
+    def fromTileXTileY(cls, xtile, ytile):
+        pass
+
+    def __init__(self, xtile, ytile):
+        self.xtile = xtile
+        self.ytile = ytile
+        self.lat, self.lon = SmartTile.num2deg(self.xtile,
+                                               self.ytile,
+                                               self.ZOOM_LEVEL)
+
+    @staticmethod
+    def deg2num(lat_deg, lon_deg, zoom):
+        lat_rad = math.radians(lat_deg)
+        n = 2.0 ** zoom
+        xtile = int((lon_deg + 180.0) / 360.0 * n)
+        ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
+        return (xtile, ytile)
+
+
+    @staticmethod
+    def num2deg(xtile, ytile, zoom):
+        n = 2.0 ** zoom
+        lon_deg = xtile / n * 360.0 - 180.0
+        lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
+        lat_deg = math.degrees(lat_rad)
+        return (lat_deg, lon_deg)
+
+
