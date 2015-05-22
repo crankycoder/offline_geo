@@ -223,6 +223,7 @@ class LocationSolution(object):
         self.bssids = bssids
 
         self.fix_tileset = None
+        self.fix_lat_lon = (None, None)
 
 
 class SmartTile(object):
