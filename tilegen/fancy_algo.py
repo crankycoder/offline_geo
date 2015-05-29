@@ -15,10 +15,9 @@ from strategies import BasicLocationFix
 import math
 
 
-
 DUPE_NUM = 100
 
-def offline_fix(strategies):
+def offline_fix(trie, city_tiles, strategies, bssids):
     """
     Setup an array of small integers (8bit) to map to all possible
     tiles (64k).
@@ -44,15 +43,12 @@ def offline_fix(strategies):
     match.
     """
 
-    fixer = LocationFixer(strategies)
+    fixer = LocationFixer(trie, city_tiles, strategies)
 
-    for fixture_filename in os.listdir('fixtures'):
-        bssids = fetch_bssids('fixtures/' + fixture_filename)
-
-        now = datetime.datetime.now()
-        solution = fixer.find_solution(now, bssids)
-        if solution.ok():
-            print str(solution)
+    now = datetime.datetime.now()
+    solution = fixer.find_solution(now, bssids)
+    if solution.ok():
+        return solution
 
 def adjacent_tile(tile_id):
     city_tiles = load_city()
@@ -69,20 +65,21 @@ def adjacent_tile(tile_id):
     yield city_tiles[(tx  , ty+1)]
     yield city_tiles[(tx+1, ty+1)]
 
+def load_trie(trie_filename):
+    fmt = "<" + ("i" * DUPE_NUM)
+    return RecordTrie(fmt).mmap(trie_filename)
 
 class LocationFixer(object):
     """
     This class provides location fixes for a particular
     city.
     """
-    def __init__(self, strategies, trie_filename='offline.record_trie'):
-        self.dupe_num = DUPE_NUM
-        self.fmt = "<" + ("i" * self.dupe_num)
-        self.trie_filename = trie_filename
-        self.offline_trie = RecordTrie(self.fmt).mmap(self.trie_filename)
+    def __init__(self, trie, city_tiles, strategies, trie_filename='offline.record_trie'):
 
-        self.city_tiles = OrderedCityTiles(load_fromdisk=True)
         self.strategies = strategies
+
+        self.offline_trie = trie
+        self.city_tiles = city_tiles
 
 
     def find_solution(self, fixTime, bssids):
