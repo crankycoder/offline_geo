@@ -95,9 +95,9 @@ class BasicLocationFix(AbstractLocationFixStrategy):
             self.locationSolution.fix_tileset = self.maxpt_tileset
 
 
-class SimpleTieBreaker():
+class SimpleTieBreaker(AbstractLocationFixStrategy):
     def __init__(self, locationFixer, prevStep, locationSolution):
-        super(locationFixer, prevStep, locationSolution)
+        super(SimpleTieBreaker, self).__init__(locationFixer, prevStep, locationSolution)
 
         # Make a copy of previous data sets
         self.tile_points = [p for p in prevStep.tile_points]
