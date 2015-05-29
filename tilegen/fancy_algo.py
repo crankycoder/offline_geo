@@ -16,7 +16,9 @@ import math
 
 
 
-def offline_fix(dupe_num):
+DUPE_NUM = 100
+
+def offline_fix(strategies):
     """
     Setup an array of small integers (8bit) to map to all possible
     tiles (64k).
@@ -42,7 +44,7 @@ def offline_fix(dupe_num):
     match.
     """
 
-    fixer = LocationFixer(dupe_num)
+    fixer = LocationFixer(strategies)
 
     for fixture_filename in os.listdir('fixtures'):
         bssids = fetch_bssids('fixtures/' + fixture_filename)
@@ -73,13 +75,14 @@ class LocationFixer(object):
     This class provides location fixes for a particular
     city.
     """
-    def __init__(self, dupe_num, trie_filename='offline.record_trie'):
-        self.dupe_num = dupe_num
+    def __init__(self, strategies, trie_filename='offline.record_trie'):
+        self.dupe_num = DUPE_NUM
         self.fmt = "<" + ("i" * self.dupe_num)
         self.trie_filename = trie_filename
         self.offline_trie = RecordTrie(self.fmt).mmap(self.trie_filename)
 
         self.city_tiles = OrderedCityTiles(load_fromdisk=True)
+        self.strategies = strategies
 
 
     def find_solution(self, fixTime, bssids):
@@ -94,9 +97,7 @@ class LocationFixer(object):
         result = LocationSolution(self.offline_trie, fixTime, bssids)
         prev_strategy = None
 
-        strategies = [BasicLocationFix, ]
-
-        for strategy in strategies:
+        for strategy in self.strategies:
             strategy(self, prev_strategy, result).execute()
         return result
 

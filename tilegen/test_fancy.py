@@ -1,5 +1,8 @@
 from fancy_algo import offline_fix
+from strategies import BasicLocationFix
 
 def test_fancy_fix():
-    offline_fix(100)
+    strategies = [BasicLocationFix, ]
+
+    offline_fix(strategies)
 
