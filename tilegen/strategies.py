@@ -60,20 +60,22 @@ class BasicLocationFix(AbstractLocationFixStrategy):
     maximum.
     """
     def __init__(self, locationFixer, prevStep, locationSolution):
-        super(locationFixer, prevStep, locationSolution)
+        super(BasicLocationFix, self).__init__(locationFixer, prevStep, locationSolution)
 
         # Copy this into strategies that are further down the chain
         self.tile_points = [0] * 65535
         self.maxpt_tileset = set()
 
     def execute(self):
+        # This is always the first fix, we don't care about any prior
+        # possible solutions
+
         bssids = self.locationSolution.bssids
         trie = self.locationSolution.trie
 
         for bssid in bssids:
             matchContainer = trie.get(bssid)
             if matchContainer is None:
-                print "BSSID [%s] is not in the dataset" % bssid
                 continue
             for pt in matchContainer[0]:
                 self.tile_points[pt] += 1
@@ -87,11 +89,9 @@ class BasicLocationFix(AbstractLocationFixStrategy):
                 self.maxpt_tileset.add(i)
 
         if max_tilept <= 1:
-            print "No tries agreed on a solution"
             return
 
         if len(self.maxpt_tileset) == 1:
-            print "Unique solution found: " + str(self.maxpt_tileset)
             self.locationSolution.fix_tileset = self.maxpt_tileset
 
 
@@ -165,9 +165,6 @@ class AdjacentTileTieBreaker(AbstractLocationFixStrategy):
         self.maxpt_tileset = copy.copy(prevStep.maxpt_tileset)
         self.max_tilept = max(self.maxpt_tileset)
 
-        self.final_lat = 0
-        self.final_lon = 0
-
     def execute(self):
         '''
         '''
@@ -194,11 +191,75 @@ class AdjacentTileTieBreaker(AbstractLocationFixStrategy):
                 tiebreaking_set.add(pt)
                 tiebreaking_set = tiebreaking_set.union(pt)
 
+        final_lat = final_lon = 0
         for tie in tiebreaking_set:
             tx, ty = self.city_tiles[tie]
             tmp_lat, tmp_lon = self.num2deg(tx, ty, self.ZOOM_LEVEL)
-            self.final_lat += (tmp_lat * 1.0/len(tiebreaking_set))
-            self.final_lon += (tmp_lon * 1.0/len(tiebreaking_set))
+            final_lat += (tmp_lat * 1.0/len(tiebreaking_set))
+            final_lon += (tmp_lon * 1.0/len(tiebreaking_set))
+
+        self.locationSolution.fix_lat_lon = (final_lat, final_lon)
 
         msg = "Multiple solutions converging on : "
-        print msg + (self.final_lat, self.final_lon)
+        print msg + self.locationSolution.fix_lat_lon
+
+
+class AdjustCenterWithAdjacentWifi(AbstractLocationFixStrategy):
+    """
+    Given a particular LocationSolution, we shift the lat/lon based on
+    any adjacent tiles that have radio signals which we can see.
+    # TODO::w
+
+    """
+    def __init__(self, locationFixer, prevStep, locationSolution):
+        super(locationFixer, prevStep, locationSolution)
+
+        # Make a copy of previous data sets
+        self.tile_points = [p for p in prevStep.tile_points]
+        self.maxpt_tileset = copy.copy(prevStep.maxpt_tileset)
+        self.max_tilept = max(self.maxpt_tileset)
+
+
+    def execute(self):
+        if len(self.fix_tileset) != 1:
+            # We don't adjust unless we have a solid fix
+            return
+
+        center_pt = list(self.fix_tileset)[0]
+
+        tx, ty = self.city_tiles[center_pt]
+        c_lat, c_lon = self.num2deg(tx, ty, self.ZOOM_LEVEL)
+        print "Center is at: %f, %f" % (c_lat, c_lon)
+
+        weighted_lat_lon = []
+        for adj_tileid in self.adjacent_tile(center_pt):
+            adj_tx, adj_ty = self.city_tiles[adj_tileid]
+            adj_pts = self.tile_points[adj_tileid]
+            if adj_pts:
+                print "Extra points at: ", adj_tileid, adj_pts
+                print "Lat Lon for %d is %s" % (adj_tileid,
+                                                self.num2deg(adj_tx,
+                                                             adj_ty,
+                                                             self.ZOOM_LEVEL))
+                tx, ty = self.city_tiles[adj_tileid]
+                lat, lon = self.num2deg(tx, ty, self.ZOOM_LEVEL)
+                weighted_lat_lon.append((adj_pts, (lat, lon)))
+
+        # Now compute a new center
+        w_lat = 0
+        w_lon = 0
+        for (adj_pts, (lat, lon)) in weighted_lat_lon:
+            w_lat += (lat * adj_pts)
+            w_lon += (lon * adj_pts)
+        shift_weight = sum([x[0] for x in weighted_lat_lon])
+        w_lat /= shift_weight
+        w_lon /= shift_weight
+        print "Adjacent wlat/wlon: %f, %f" % (w_lat, w_lon)
+
+        # No need to be overly smart here.  Just use 50% real fix, 50%
+        # weighted adjusted location.
+        n_lat = (c_lat * 0.5 + w_lat * 0.5)
+        n_lon = (c_lon * 0.5 + w_lon * 0.5)
+
+        self.locationSolution.fix_lat_lon = (n_lat, n_lon)
+        print "Recomputed lat/lon: %f, %f" % self.locationSolution.fix_lat_lon
