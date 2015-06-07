@@ -8,7 +8,10 @@ from matplotlib.path import Path
 from tiler import generate_stream
 import csv
 import math
+import os
 import os.path
+
+from hydra import WritingBloomFilter
 
 # TODO: this needs to get pulled out into a config file once we know
 # this methodology works.
@@ -224,7 +227,13 @@ class OrderedCityTiles(object):
         # For indexed fetches into the list
         if isinstance(k, int):
             # Return the (tilex, tiley) tuple
-            return self._hash_list[k]
+            try:
+                return self._hash_list[k]
+            except:
+                import pdb
+                pdb.set_trace()
+                print k
+                pass
         if isinstance(k, tuple):
             # Return the integer tile_id
             return self._hash[k]
@@ -346,6 +355,7 @@ def compute_tries(dupe_num, fmt, output_fname):
 
     dataset = {}
     with open('obfuscated.csv') as file_in:
+        #with open('bssid_sobol_idx.csv') as file_in:
         reader = csv.reader(file_in)
         last_bssid = None
         bssid_locations = None
@@ -515,27 +525,48 @@ def generate_bssid_sobol_keys(max_idx):
                 writer.writerow(r)
 
 
-if __name__ == '__main__':
-    pass
-    # This set of points roughly contains the Metro toronto area
-    #    v = load_path('input.geojson')
-    #    polygon = PNPoly(v)
-    #
-    #    compute_pnpoly_set(polygon)
-    #    pnpoly_to_tiles()
-    #    compute_all_tiles_in_polygon(polygon)
-    #
-    #    TOTAL_CITY_TILES = file_len('incity_tiles.csv')
-    #
-    #    dupe_num = 100
-    #    fmt = "<" + ("i" * dupe_num)
-    #
-    #    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
-    #
-    #    # Skip this step as we already have the sobol keys
-    #    generate_bssid_sobol_keys(sobol_length)
-    #    obfuscate_tile_data(dupe_num, TOTAL_CITY_TILES)
-    #
-    #    compute_tries(dupe_num, fmt, 'offline.record_trie')
-    #test_offline_fix(fmt)
+def compute_bloomfilter():
+    ordered_city_tiles = load_city()
 
+    blooms = {}
+
+    with open('bssid_sobol_idx.csv') as file_in:
+        reader = csv.reader(file_in)
+        last_bssid = None
+        bssid_locations = None
+        for row in reader:
+            bssid, tile_x, tile_y, zlevel, sobol_idx = row
+            key = (tile_x, tile_y)
+            if key not in blooms:
+                blooms[key] = []
+            blooms[key].append(bssid)
+
+    for k in blooms:
+        items = blooms[k]
+        num_items = len(items)
+        fname = 'tile_%s_%s.bloom' % (k[0], k[1])
+        print "Creating %s" % fname
+        filter = WritingBloomFilter(num_items, 0.01, 
+                filename='bloom_toronto/filters/' + fname)
+        for v in items:
+            filter.add(v)
+
+if __name__ == '__main__':
+    DUPE_NUM = 100
+    fmt = "<" + ("i" * DUPE_NUM)
+
+    # This set of points roughly contains the Metro toronto area
+    v = load_path('input.geojson')
+    polygon = PNPoly(v)
+    compute_pnpoly_set(polygon)
+    pnpoly_to_tiles()
+    compute_all_tiles_in_polygon(polygon)
+
+    TOTAL_CITY_TILES = file_len('incity_tiles.csv')
+    sobol_length = generate_sobol_csv(TOTAL_CITY_TILES)
+
+    # Skip this step as we already have the sobol keys
+    generate_bssid_sobol_keys(sobol_length)
+    obfuscate_tile_data(DUPE_NUM, TOTAL_CITY_TILES)
+
+    compute_tries(DUPE_NUM, fmt, 'manhattan.record_trie')
