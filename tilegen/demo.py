@@ -13,10 +13,6 @@ import os.path
 
 from hydra import WritingBloomFilter
 
-# TODO: this needs to get pulled out into a config file once we know
-# this methodology works.
-SALT = '$2a$12$t.BjcCgX.UKVpHKfWnMM6u'
-
 # Never change this unless you've thought about it 97 times.
 # Then still never change it.
 ZOOM_LEVEL = 18
@@ -552,7 +548,7 @@ def compute_bloomfilter():
             filter.add(v)
 
 if __name__ == '__main__':
-    DUPE_NUM = 100
+    DUPE_NUM = 10
     fmt = "<" + ("i" * DUPE_NUM)
 
     # This set of points roughly contains the Metro toronto area
@@ -567,6 +563,12 @@ if __name__ == '__main__':
 
     # Skip this step as we already have the sobol keys
     generate_bssid_sobol_keys(sobol_length)
+
+    # TODO: this stage should be pluggable
+    # Consider rewriting this as a generator
+    # so that we can stream data into the file output.
     obfuscate_tile_data(DUPE_NUM, TOTAL_CITY_TILES)
 
-    compute_tries(DUPE_NUM, fmt, 'manhattan.record_trie')
+    # This stage should also be pluggable as we may or may not 
+    # use marisa tries for final storage.
+    compute_tries(DUPE_NUM, fmt, 'toronto.record_trie')

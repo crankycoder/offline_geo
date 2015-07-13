@@ -1,6 +1,9 @@
 """
 This module provides a mechanism to compute fixes using the trie data.
 
+This code should be used when porting the search solution to other
+platforms.  Primarily - this means Android/Java
+
 Test this using test_fancy.py and nose.
 """
 
@@ -95,7 +98,9 @@ class LocationFixer(object):
         prev_strategy = None
 
         for strategy in self.strategies:
-            strategy(self, prev_strategy, result).execute()
+            curStrategy = strategy(self, prev_strategy, result)
+            curStrategy.execute()
+            prev_strategy = curStrategy
         return result
 
 class LocationSolution(object):

@@ -102,17 +102,27 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
         # Make a copy of previous data sets
         self.tile_points = [p for p in prevStep.tile_points]
         self.maxpt_tileset = copy.copy(prevStep.maxpt_tileset)
-        self.max_tilept = max(self.maxpt_tileset)
+
+        import pdb
+        pdb.set_trace()
+        self.max_tilept = max(self.tile_points)
+
+        # Handy dandy shortcut
+        self.city_tiles = locationFixer.city_tiles
 
     def execute(self):
         # We have to solve a tie breaker
-        # Square the points for the max point array
-        for pt in self.maxpt_tileset:
-            self.tile_points[pt] *= self.tile_points[pt]
+        if len(self.maxpt_tileset) <= 1:
+            return
+        else:
+            # There are multiple tiles with scores
+            import pdb
+            pdb.set_trace()
 
         msg = "Tie breaker with score: [%d]! Highest scoring tiles: %s"
         print msg % (self.max_tilept, str(self.maxpt_tileset))
-        print "Adjusted score is: %d" % (self.max_tilept*self.max_tilept)
+        import pdb
+        pdb.set_trace()
 
         adj_tile_points = {}
 
@@ -120,15 +130,15 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
             # For each adjacent tile, add points into the center
             for adjacent_tileid in self.adjacent_tile(tile):
                 new_pts = self.tile_points[adjacent_tileid]
-
-                msg = "Adding %d points from [%s](%d) to tile: %s(%d)"
-                print msg % (new_pts,
-                             self.city_tiles[adjacent_tileid],
-                             adjacent_tileid,
-                             self.city_tiles[tile],
-                             tile)
-                adj_tile_points[tile] = adj_tile_points.get(tile, 0)
-                adj_tile_points[tile] += new_pts
+                if new_pts != 0:
+                    msg = "Adding %d points from [%s](%d) to tile: %s(%d)"
+                    print msg % (new_pts,
+                                 self.city_tiles[adjacent_tileid],
+                                 adjacent_tileid,
+                                 self.city_tiles[tile],
+                                 tile)
+                    adj_tile_points[tile] = adj_tile_points.get(tile, 0)
+                    adj_tile_points[tile] += new_pts
 
         for k, v in adj_tile_points.items():
             self.tile_points[k] += v
@@ -145,6 +155,17 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
         if len(self.maxpt_tileset) == 1:
             print "Tie breaking solution: %s" % str(self.maxpt_tileset)
 
+
+class AdjacentTileGravityWell(AbstractLocationFixStrategy):
+    """
+    TODO: This strategy is useful when we have a very sparse match.
+
+    We treat each scored tile as a gravity well and pull in 0.75 points
+    from the adjacent tile.  This can probably be run immediately
+    after the BasicLocationFix.  Adding in adjacent tiles should give
+    us a better ability to discern what tile we are actually in.
+    """
+    pass
 
 class AdjacentTileTieBreaker(AbstractLocationFixStrategy):
     """
@@ -168,9 +189,11 @@ class AdjacentTileTieBreaker(AbstractLocationFixStrategy):
     def execute(self):
         '''
         '''
-        if len(self.maxpt_tileset) <= 1:
+        if len(self.maxpt_tileset) == 1:
             # No need to do anymore work here
             return
+        import pdb
+        pdb.set_trace()
 
         msg = "Multiple solutions: "
         print msg + self.maxpt_tileset
