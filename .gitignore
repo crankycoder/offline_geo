@@ -7,3 +7,5 @@
 *.bssid
 
 toronto_bssid*.txt
+build
+bloom_toronto
