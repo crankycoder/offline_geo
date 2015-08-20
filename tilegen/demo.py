@@ -1,16 +1,22 @@
 #!/usr/bin/env python
 
 # TODO clean up this packaging. it's terrible.
+
+# Standard library
+import csv
+from os import unlink
+from os.path import isfile
+
+# Custom modules
 from devrand import randint
 from fileutil import file_len
 from geojson import load_geojson
-from marisa_trie import RecordTrie
 import tiler
-import csv
-import math
-import os
-import os.path
+from slippytiles import num2deg, deg2num
 from polytools import PNPoly
+
+# PyPI stuff
+from marisa_trie import RecordTrie
 
 
 # Never change this unless you've thought about it 97 times.
@@ -182,24 +188,10 @@ class PrivateLocations(object):
                     bssid = row[0]
                     lat = float(row[1])
                     lon = float(row[2])
-                    tile_x, tile_y = self._deg2num(lat, lon, ZOOM_LEVEL)
+                    tile_x, tile_y = deg2num(lat, lon, ZOOM_LEVEL)
                     entry = (bssid, tile_x, tile_y)
                     entry = (bssid, tile_x, tile_y, ZOOM_LEVEL)
                     writer.writerow(entry)
-
-    def _deg2num(self, lat_deg, lon_deg, zoom):
-        """
-        Compute lat, lon and zoom level to an x,y tile co-ordinate
-        Zoom level is defined as:
-        * 0 (1 tile for the world)
-        * 19 max zoom (274,877,906,944 tiles for the world)
-        """
-        lat_rad = math.radians(lat_deg)
-        n = 2.0 ** zoom
-        xtile = int((lon_deg + 180.0) / 360.0 * n)
-        ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 /
-                    math.cos(lat_rad))) / math.pi) / 2.0 * n)
-        return (xtile, ytile)
 
     def _compute_all_tiles_in_polygon(self):
         '''
@@ -224,8 +216,8 @@ class PrivateLocations(object):
         '''
         p1, p2 = self.polygon_filter.bounding_box()
 
-        tx0, ty0 = self._deg2num(p1[0], p1[1], ZOOM_LEVEL)
-        tx1, ty1 = self._deg2num(p2[0], p2[1], ZOOM_LEVEL)
+        tx0, ty0 = deg2num(p1[0], p1[1], ZOOM_LEVEL)
+        tx1, ty1 = deg2num(p2[0], p2[1], ZOOM_LEVEL)
 
         # Now iterate over tx0 to tx1 at ty0
         i = 0
@@ -241,20 +233,13 @@ class PrivateLocations(object):
             writer = csv.writer(fout)
             for x in range(*tx_tiles):
                 for y in range(*ty_tiles):
-                    tile_pt = self._num2deg(x, y, ZOOM_LEVEL)
+                    tile_pt = num2deg(x, y, ZOOM_LEVEL)
                     if self.polygon_filter.contains(tile_pt[0], tile_pt[1]):
                         writer.writerow((x, y, ZOOM_LEVEL))
                     i += 1
                     if i % 100 == 0:
                         msg = "Processed %d out of %d tiles in polygon"
                         print msg % (i, total_tiles)
-
-    def _num2deg(self, xtile, ytile, zoom):
-        n = 2.0 ** zoom
-        lon_deg = xtile / n * 360.0 - 180.0
-        lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
-        lat_deg = math.degrees(lat_rad)
-        return (lat_deg, lon_deg)
 
     def _generate_bssid_sobol_keys(self):
         # Read in pnpoly_tiles.csv
@@ -265,11 +250,13 @@ class PrivateLocations(object):
         # random numbers assigned into it so it's important
         # to keep the bssid_sobol_idx.csv file around for the
         # next iteration of the tile generation.
-        max_idx = self._generate_sobol_csv()
+        max_idx = tiler.write_sobol_seq(self.sobol_seq_csv,
+                                        self.sobol_seed,
+                                        self.total_city_tiles)
 
-        if os.path.isfile(self.bssid_sobol_idx_csv):
+        if isfile(self.bssid_sobol_idx_csv):
             print "Clobbering the existing %s file" % self.bssid_sobol_idx_csv
-            os.unlink(self.bssid_sobol_idx_csv)
+            unlink(self.bssid_sobol_idx_csv)
 
         with open(self.bssid_sobol_idx_csv, 'w') as file_out:
             writer = csv.writer(file_out)
@@ -280,19 +267,6 @@ class PrivateLocations(object):
                     sobol_idx = randint(0, max_idx-1)
                     r = (bssid, tilex, tiley, zlevel, sobol_idx)
                     writer.writerow(r)
-
-    def _generate_sobol_csv(self):
-        """
-        generate a sobol sequence distributed over a range equal
-        to the the total length of incity_tiles.csv.  Sequence length
-        should be 10x the distribution width. write this out to
-        sobol_seq.csv
-        """
-        with open(self.sobol_seq_csv, 'w') as fout:
-            tiler.generate_stream(fout,
-                                  seed=self.sobol_seed,
-                                  max_tilenum=self.total_city_tiles)
-        return file_len(self.sobol_seq_csv)
 
     def _obfuscate_tile_data(self):
         # TODO: this stage should be pluggable

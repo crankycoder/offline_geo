@@ -6,11 +6,22 @@ to position fake BSSIDs.
 We use a SOBOL sequence to generate a large stream of random numbers.
 
 '''
-from sobol import i4_uniform
-from numpy import bitwise_xor
+# Std lib
 import csv
 
-def generate_stream(fout, seed=0, max_tilenum=0):
+# PyPI
+from numpy import bitwise_xor
+from sobol import i4_uniform
+
+# Custom stuff
+from fileutil import file_len
+
+def write_sobol_seq(fname, seed, max_tilenum):
+    with open(fname, 'w') as fout:
+        _generate_stream(fout, seed, max_tilenum)
+    return file_len(self.sobol_seq_csv)
+
+def _generate_stream(fout, seed=0, max_tilenum=0):
     """
     This generates a stable stream of quasi-random numbers and write
     it out to disk.  The idea is to use the list as a circular buffer.

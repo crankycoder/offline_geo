@@ -9,7 +9,7 @@ import os
 
 from strategies import BasicLocationFix, SimpleTieBreaker
 
-TOTAL_TORONTO_FIXTURES = 131.0
+TOTAL_TORONTO_FIXTURES = 131
 
 TRIE = load_trie('offline.record_trie')
 CITY_TILES = OrderedCityTiles(load_fromdisk=True)
@@ -23,7 +23,7 @@ def test_basic_location_fix():
         soln = offline_fix(TRIE, CITY_TILES, strategies, bssids)
         if soln:
             count += 1
-    print "Basic location fix rate: %0.2f" % (count / TOTAL_TORONTO_FIXTURES)
+    print "Basic location fix rate: %0.2f" % (count * 1.0 / TOTAL_TORONTO_FIXTURES)
 
 
 def test_basic_plus_tie_breaker():
