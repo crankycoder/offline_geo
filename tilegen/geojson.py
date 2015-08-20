@@ -2,7 +2,7 @@ import json
 from matplotlib.path import Path
 
 
-def load_path(geojson_filename):
+def load_geojson(geojson_filename):
     jdata = json.load(open(geojson_filename))
     assert jdata['features'][0]['geometry']['type'] == 'Polygon'
     assert len(jdata['features'][0]['geometry']['coordinates']) == 1
