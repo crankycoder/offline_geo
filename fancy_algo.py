@@ -17,8 +17,7 @@ from marisa_trie import RecordTrie
 from strategies import BasicLocationFix
 import math
 
-
-DUPE_NUM = 100
+DUPE_NUM = 3
 
 def offline_fix(trie, city_tiles, strategies, bssids):
     """
@@ -69,7 +68,7 @@ def adjacent_tile(tile_id):
     yield city_tiles[(tx+1, ty+1)]
 
 def load_trie(trie_filename):
-    fmt = "<" + ("i" * DUPE_NUM)
+    fmt = ">" + ("i" * DUPE_NUM)
     return RecordTrie(fmt).mmap(trie_filename)
 
 class LocationFixer(object):
