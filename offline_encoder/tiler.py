@@ -19,7 +19,7 @@ from fileutil import file_len
 def write_sobol_seq(fname, seed, max_tilenum):
     with open(fname, 'w') as fout:
         _generate_stream(fout, seed, max_tilenum)
-    return file_len(self.sobol_seq_csv)
+    return file_len(fname)
 
 def _generate_stream(fout, seed=0, max_tilenum=0):
     """

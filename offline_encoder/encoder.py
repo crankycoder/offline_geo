@@ -160,7 +160,7 @@ class PrivateLocations(object):
         # level for all tiles within the city shapefile boundaries.
         # CSV file is formatted with (x, y, zoom level) using slippy
         # tile zoom level 18 (or whatever ZOOM_LEVEL) is defined as.
-        self.incity_tiles = 'incity_tiles.csv'
+        self.incity_tiles = 'outputs/incity_tiles.csv'
 
         # This pair of variables defines the initial seed to generate
         # a long sobol sequence of numbers, and the file name of the
@@ -169,8 +169,9 @@ class PrivateLocations(object):
         # data.  These values *must* be stable or else someone can
         # attack the dataset over time to see which points move, and
         # which points do not move to determine 'true' locations.
+        # TODO: this should probably be written out to disk somewhere
         self.sobol_seed = 123344129
-        self.sobol_seq_csv = 'sobol_seq.csv'
+        self.sobol_seq_csv = 'outputs/sobol_seq.csv'
 
         # This is an output file where each row is
         # (BSSID, tile_x, tile_y, zoom_level, sobol_idx)
@@ -180,7 +181,7 @@ class PrivateLocations(object):
         # generating a list of random placements within the city
         # space.
         # All rows in this file are 'real' BSSIDs.
-        self.bssid_sobol_idx_csv = 'bssid_sobol_idx.csv'
+        self.bssid_sobol_idx_csv = 'outputs/bssid_sobol_idx.csv'
 
         # This is the same layout as bssid_sobol_idx_csv, but each row
         # is duplicated with fake tile_x, tile_y co-ordinates.  Those
@@ -448,6 +449,7 @@ class PrivateLocations(object):
 
     def generate_recordtrie(self):
         # This set of points roughly contains the Metro toronto area
+
         self._compute_pnpoly_set()
         self._pnpoly_to_tiles()
         self._compute_all_tiles_in_polygon()
