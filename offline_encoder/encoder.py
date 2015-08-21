@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+"""
+This is the main script you need to care about when generating
+a record trie for BSSID data.
+"""
+
 # Standard library
 import csv
 
