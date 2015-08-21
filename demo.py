@@ -184,7 +184,7 @@ class PrivateLocations(object):
         self.bssid_sobol_obfuscated_csv = 'obfuscated.csv'
 
         # The final record trie
-        self.output_trie_fname = 'toronto.record_trie'
+        self.output_trie_fname = 'outputs/toronto.record_trie'
 
     def _compute_pnpoly_set(self):
         '''
