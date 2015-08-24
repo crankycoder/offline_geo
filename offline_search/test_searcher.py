@@ -8,7 +8,7 @@ from citytiles import OrderedCityTiles
 from fixture_loader import fetch_bssids
 import os
 
-from strategies import BasicLocationFix, SimpleTieBreaker
+from strategies import BasicLocationFix, AdjacentTileTieBreaker
 
 TOTAL_TORONTO_FIXTURES = 131
 
@@ -25,11 +25,12 @@ def test_basic_location_fix():
         soln = offline_fix(TRIE, CITY_TILES, strategies, bssids)
         if soln:
             count += 1
-    print "Basic location fix rate: %0.2f" % (count * 1.0 / TOTAL_TORONTO_FIXTURES)
+    tmpl = "Basic location fix rate: %0.2f"
+    print tmpl % (count * 1.0 / TOTAL_TORONTO_FIXTURES)
 
 
-def test_basic_plus_tie_breaker():
-    strategies = [BasicLocationFix, SimpleTieBreaker]
+def test_basic_plus_adjacent():
+    strategies = [BasicLocationFix, AdjacentTileTieBreaker]
 
     count = 0
     for fixture_filename in os.listdir('tests/fixtures'):
@@ -37,4 +38,4 @@ def test_basic_plus_tie_breaker():
         soln = offline_fix(TRIE, CITY_TILES, strategies, bssids)
         if soln:
             count += 1
-    print "Basic+SimpleTie location fix rate: %0.2f" % (count / TOTAL_TORONTO_FIXTURES)
+    print "Basic+Adjacent location fix rate: %0.2f" % (count / TOTAL_TORONTO_FIXTURES)

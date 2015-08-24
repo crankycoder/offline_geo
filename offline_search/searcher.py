@@ -10,9 +10,7 @@ Test this using test_fancy.py and nose.
 import json
 import datetime
 import math
-from os.path import abspath, expanduser, islink, isabs
-from os.path import join, dirname
-import os
+from os.path import abspath, expanduser
 
 from marisa_trie import RecordTrie
 
@@ -58,18 +56,18 @@ def load_trie(trie_filename):
     l = abspath(expanduser(trie_filename))
     return RecordTrie(fmt).mmap(l)
 
+
 class LocationFixer(object):
     """
     This class provides location fixes for a particular
     city.
     """
-    def __init__(self, trie, city_tiles, strategies, trie_filename='offline.record_trie'):
+    def __init__(self, trie, city_tiles, strategies, trie_filename):
 
         self.strategies = strategies
 
         self.offline_trie = trie
         self.city_tiles = city_tiles
-
 
     def find_solution(self, fixTime, bssids):
         '''
@@ -89,9 +87,10 @@ class LocationFixer(object):
             prev_strategy = curStrategy
         return result
 
+
 class LocationSolution(object):
     """
-    A LocationSolution is the object that is passed into a chain of 
+    A LocationSolution is the object that is passed into a chain of
     strategies to determine a location fix.
 
     A lat_lon value of None indicates no possible solution has been found.
@@ -105,16 +104,16 @@ class LocationSolution(object):
         self.fix_lat_lon = (None, None)
 
     def ok(self):
-        return self.fix_tileset != None or self.fix_lat_lon != (None, None)
+        return self.fix_tileset is not None or self.fix_lat_lon != (None, None)
 
     def __str__(self):
         rset = {}
 
-        if self.fix_tileset != None:
+        if self.fix_tileset is not None:
             rset["tileset"] = list(self.fix_tileset)
 
         if self.fix_lat_lon != (None, None):
-           rset['lat_lon'] = self.fix_lat_lon
+            rset['lat_lon'] = self.fix_lat_lon
 
         return json.dumps(rset)
 
@@ -128,7 +127,7 @@ class SmartTile(object):
 
     @classmethod
     def fromLatLon(cls, lat, lon):
-        xtile, ytile = SmartTile.deg2num(lat, lon, self.ZOOM_LEVEL)
+        xtile, ytile = SmartTile.deg2num(lat, lon, cls.ZOOM_LEVEL)
         return SmartTile(xtile, ytile)
 
     @classmethod
@@ -147,9 +146,9 @@ class SmartTile(object):
         lat_rad = math.radians(lat_deg)
         n = 2.0 ** zoom
         xtile = int((lon_deg + 180.0) / 360.0 * n)
-        ytile = int((1.0 - math.log(math.tan(lat_rad) + (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
+        ytile = int((1.0 - math.log(math.tan(lat_rad) +
+                    (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
         return (xtile, ytile)
-
 
     @staticmethod
     def num2deg(xtile, ytile, zoom):

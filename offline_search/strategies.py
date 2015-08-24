@@ -148,17 +148,6 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
             print "Tie breaking solution: %s" % str(self.maxpt_tileset)
 
 
-class AdjacentTileGravityWell(AbstractLocationFixStrategy):
-    """
-    TODO: This strategy is useful when we have a very sparse match.
-
-    We treat each scored tile as a gravity well and pull in 0.75 points
-    from the adjacent tile.  This can probably be run immediately
-    after the BasicLocationFix.  Adding in adjacent tiles should give
-    us a better ability to discern what tile we are actually in.
-    """
-    pass
-
 class AdjacentTileTieBreaker(AbstractLocationFixStrategy):
     """
     By default, the lat/lon we return is simply the center of
@@ -171,7 +160,7 @@ class AdjacentTileTieBreaker(AbstractLocationFixStrategy):
     lat/lon from the center of a tile.
     """
     def __init__(self, locationFixer, prevStep, locationSolution):
-        super(locationFixer, prevStep, locationSolution)
+        super(AdjacentTileTieBreaker, self).__init__(locationFixer, prevStep, locationSolution)
 
         # Make a copy of previous data sets
         self.tile_points = [p for p in prevStep.tile_points]
@@ -184,8 +173,6 @@ class AdjacentTileTieBreaker(AbstractLocationFixStrategy):
         if len(self.maxpt_tileset) == 1:
             # No need to do anymore work here
             return
-        import pdb
-        pdb.set_trace()
 
         msg = "Multiple solutions: "
         print msg + self.maxpt_tileset
@@ -218,63 +205,3 @@ class AdjacentTileTieBreaker(AbstractLocationFixStrategy):
         msg = "Multiple solutions converging on : "
         print msg + self.locationSolution.fix_lat_lon
 
-
-class AdjustCenterWithAdjacentWifi(AbstractLocationFixStrategy):
-    """
-    Given a particular LocationSolution, we shift the lat/lon based on
-    any adjacent tiles that have radio signals which we can see.
-    # TODO::w
-
-    """
-    def __init__(self, locationFixer, prevStep, locationSolution):
-        super(locationFixer, prevStep, locationSolution)
-
-        # Make a copy of previous data sets
-        self.tile_points = [p for p in prevStep.tile_points]
-        self.maxpt_tileset = copy.copy(prevStep.maxpt_tileset)
-        self.max_tilept = max(self.maxpt_tileset)
-
-
-    def execute(self):
-        if len(self.fix_tileset) != 1:
-            # We don't adjust unless we have a solid fix
-            return
-
-        center_pt = list(self.fix_tileset)[0]
-
-        tx, ty = self.city_tiles[center_pt]
-        c_lat, c_lon = self.num2deg(tx, ty, self.ZOOM_LEVEL)
-        print "Center is at: %f, %f" % (c_lat, c_lon)
-
-        weighted_lat_lon = []
-        for adj_tileid in self.adjacent_tile(center_pt):
-            adj_tx, adj_ty = self.city_tiles[adj_tileid]
-            adj_pts = self.tile_points[adj_tileid]
-            if adj_pts:
-                print "Extra points at: ", adj_tileid, adj_pts
-                print "Lat Lon for %d is %s" % (adj_tileid,
-                                                self.num2deg(adj_tx,
-                                                             adj_ty,
-                                                             self.ZOOM_LEVEL))
-                tx, ty = self.city_tiles[adj_tileid]
-                lat, lon = self.num2deg(tx, ty, self.ZOOM_LEVEL)
-                weighted_lat_lon.append((adj_pts, (lat, lon)))
-
-        # Now compute a new center
-        w_lat = 0
-        w_lon = 0
-        for (adj_pts, (lat, lon)) in weighted_lat_lon:
-            w_lat += (lat * adj_pts)
-            w_lon += (lon * adj_pts)
-        shift_weight = sum([x[0] for x in weighted_lat_lon])
-        w_lat /= shift_weight
-        w_lon /= shift_weight
-        print "Adjacent wlat/wlon: %f, %f" % (w_lat, w_lon)
-
-        # No need to be overly smart here.  Just use 50% real fix, 50%
-        # weighted adjusted location.
-        n_lat = (c_lat * 0.5 + w_lat * 0.5)
-        n_lon = (c_lon * 0.5 + w_lon * 0.5)
-
-        self.locationSolution.fix_lat_lon = (n_lat, n_lon)
-        print "Recomputed lat/lon: %f, %f" % self.locationSolution.fix_lat_lon
