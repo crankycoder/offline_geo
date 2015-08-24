@@ -11,7 +11,7 @@ import json
 import datetime
 import math
 from os.path import abspath, expanduser
-
+import copy
 from marisa_trie import RecordTrie
 
 DUPE_NUM = 3
@@ -43,12 +43,11 @@ def offline_fix(trie, city_tiles, strategies, bssids):
     match.
     """
 
-    fixer = LocationFixer(trie, city_tiles, strategies)
+    fixer = LocationFixer(trie, city_tiles, strategies, '../outputs/toronto.record_trie')
 
     now = datetime.datetime.now()
     solution = fixer.find_solution(now, bssids)
-    if solution.ok():
-        return solution
+    return solution.asjson()
 
 
 def load_trie(trie_filename):
@@ -78,14 +77,14 @@ class LocationFixer(object):
         minute.
         '''
 
-        result = LocationSolution(self.offline_trie, fixTime, bssids)
+        soln = LocationSolution(self.offline_trie, fixTime, bssids)
         prev_strategy = None
 
         for strategy in self.strategies:
-            curStrategy = strategy(self, prev_strategy, result)
-            curStrategy.execute()
+            curStrategy = strategy(self, prev_strategy)
+            curStrategy.execute(soln)
             prev_strategy = curStrategy
-        return result
+        return soln
 
 
 class LocationSolution(object):
@@ -93,29 +92,55 @@ class LocationSolution(object):
     A LocationSolution is the object that is passed into a chain of
     strategies to determine a location fix.
 
-    A lat_lon value of None indicates no possible solution has been found.
+    A fix_lat_lon value of (None, None) indicates no possible solution
+    has been found.
+
+    Each strategy places it's solution data into the dict with a key
+    using it's classname. It is the responsibility of each strategy to
+    store well structured data. No particular constraints are
+    implemented.
     """
     def __init__(self, trie, fix_time, bssids):
+        # These should be immutable constants
         self.trie = trie
         self.fixTime = fix_time
-        self.bssids = bssids
+        # Make the BSSID list a tuple to force it to be immutable
+        self.bssids = tuple(bssids)
 
-        self.fix_tileset = None
-        self.fix_lat_lon = (None, None)
+        # This is a list of string names that orders simple to most
+        # complex strategies
+        self.strategy_order = []
+        self.strategy_solutions = {}
+        self.strategy_guess = {}
 
-    def ok(self):
-        return self.fix_tileset is not None or self.fix_lat_lon != (None, None)
+    def get_soln_data(self, cls):
+        return copy.deepcopy(self.strategy_solutions[cls.__name__])
+
+    def add_soln(self, cls, data, best_guess):
+        '''
+        Call this method to register a strategy name, it's data and
+        it's list of best guess tile ids
+        '''
+        cls_name = cls.__name__
+        assert cls_name not in self.strategy_order
+
+        self.strategy_order.append(cls_name)
+        self.strategy_solutions[cls_name] = data
+        self.strategy_guess[cls_name] = best_guess
+
+    def best_guess(self):
+        # TODO: be smarter.  but for now, just return the first list
+        # of results
+        for strategy in self.strategy_order:
+            soln = self.strategy_guess.get(strategy, [])
+            return soln
+        return []
+
+    def asjson(self):
+        return json.dumps({'city_tiles': self.best_guess()})
 
     def __str__(self):
-        rset = {}
-
-        if self.fix_tileset is not None:
-            rset["tileset"] = list(self.fix_tileset)
-
-        if self.fix_lat_lon != (None, None):
-            rset['lat_lon'] = self.fix_lat_lon
-
-        return json.dumps(rset)
+        return self.asjson()
 
 
 class SmartTile(object):
