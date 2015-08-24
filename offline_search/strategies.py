@@ -1,4 +1,3 @@
-import copy
 import math
 
 
@@ -32,20 +31,29 @@ class AbstractLocationFixStrategy(object):
                     math.cos(lat_rad))) / math.pi) / 2.0 * n)
         return (xtile, ytile)
 
+    def safe_city_tiles(self, x, y, city_tiles):
+        try:
+            return city_tiles[(x, y)]
+        except KeyError:
+            # This can happen if the adjacent tile is on the edge of a
+            # city border
+            return None
+
     def adjacent_tile(self, tile_id):
         city_tiles = self.locationFixer.city_tiles
         tx, ty = city_tiles[tile_id]
 
-        yield city_tiles[(tx-1, ty-1)]
-        yield city_tiles[(tx, ty-1)]
-        yield city_tiles[(tx+1, ty-1)]
+        # This shouldn't happen but it does.  Just skip this 
+        # problem for now and come back to it later.
+        if (tx, ty) == (None, None):
+            raise StopIteration()
 
-        yield city_tiles[(tx-1, ty)]
-        yield city_tiles[(tx+1, ty)]
-
-        yield city_tiles[(tx-1, ty+1)]
-        yield city_tiles[(tx, ty+1)]
-        yield city_tiles[(tx+1, ty+1)]
+        for (x, y) in [(tx-1, ty-1), (tx, ty-1), (tx+1, ty-1),
+                       (tx-1, ty), (tx+1, ty), (tx-1, ty+1),
+                       (tx, ty+1), (tx+1, ty+1),]:
+            tmp_result = self.safe_city_tiles(x, y, city_tiles)
+            if tmp_result is not None:
+                yield tmp_result
 
     def execute(self):
         """ Concrete strategies must implements a strategy against"""
@@ -86,14 +94,13 @@ class BasicLocationFix(AbstractLocationFixStrategy):
 
         locationSolution.add_soln(self.__class__,
                                   tile_points,
-                                  best_guess)
+                                  tuple(best_guess))
 
 
 class SimpleTieBreaker(AbstractLocationFixStrategy):
     def __init__(self, locationFixer, prevStep):
         super(SimpleTieBreaker, self).__init__(locationFixer,
                                                prevStep)
-
 
     def execute(self, locationSolution):
         # Make a copy of previous data sets
@@ -103,48 +110,53 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
         city_tiles = self.locationFixer.city_tiles
 
         # We have to solve a tie breaker
-        import pdb
-        pdb.set_trace()
-        if len(tile_points) > 0:
-            pass
+        assert len(tile_points) == 65535
 
-        import pdb
-        pdb.set_trace()
+        max_pts_in_tile = max(tile_points)
+        if max_pts_in_tile == 0:
+            return
 
-        if len(self.maxpt_tileset) <= 1:
+        working_tileset = set()
+        for tile_id, tile_pts in enumerate(tile_points):
+            if tile_pts == max_pts_in_tile:
+                working_tileset.add(tile_id)
+
+        if len(working_tileset) <= 1:
             return
 
         msg = "Tie breaker with score: [%d]! Highest scoring tiles: %s"
-        print msg % (self.max_tilept, str(self.maxpt_tileset))
+        #print msg % (max_pts_in_tile, str(working_tileset))
 
         adj_tile_points = {}
 
-        for tile in self.maxpt_tileset:
+        for tile in working_tileset:
             # For each adjacent tile, add points into the center
             for adjacent_tileid in self.adjacent_tile(tile):
-                new_pts = self.tile_points[adjacent_tileid]
+                new_pts = tile_points[adjacent_tileid]
                 if new_pts != 0:
                     msg = "Adding %d points from [%s](%d) to tile: %s(%d)"
-                    print msg % (new_pts,
+                    msg_out = msg % (new_pts,
                                  city_tiles[adjacent_tileid],
                                  adjacent_tileid,
                                  city_tiles[tile],
                                  tile)
+                    #print msg_out
+
                     adj_tile_points[tile] = adj_tile_points.get(tile, 0)
                     adj_tile_points[tile] += new_pts
 
         for k, v in adj_tile_points.items():
-            self.tile_points[k] += v
+            tile_points[k] += v
 
         max_tilept = 0
-        self.maxpt_tileset = set()
-        for i, v in enumerate(self.tile_points):
+        maxpt_tileset = set()
+        for i, v in enumerate(tile_points):
             if v >= max_tilept:
                 max_tilept = v
-                self.maxpt_tileset.clear()
+                maxpt_tileset.clear()
             if max_tilept == v:
-                self.maxpt_tileset.add(i)
+                maxpt_tileset.add(i)
 
-        if len(self.maxpt_tileset) == 1:
-            print "Tie breaking solution: %s" % str(self.maxpt_tileset)
-
+        locationSolution.add_soln(self.__class__,
+                                  tile_points,
+                                  tuple(maxpt_tileset))

@@ -43,7 +43,10 @@ def offline_fix(trie, city_tiles, strategies, bssids):
     match.
     """
 
-    fixer = LocationFixer(trie, city_tiles, strategies, '../outputs/toronto.record_trie')
+    fixer = LocationFixer(trie,
+                          city_tiles,
+                          strategies,
+                          '../outputs/toronto.record_trie')
 
     now = datetime.datetime.now()
     solution = fixer.find_solution(now, bssids)
@@ -129,11 +132,28 @@ class LocationSolution(object):
         self.strategy_guess[cls_name] = best_guess
 
     def best_guess(self):
-        # TODO: be smarter.  but for now, just return the first list
-        # of results
+
+        solutions = set()
+
+        min_results = None
+
         for strategy in self.strategy_order:
-            soln = self.strategy_guess.get(strategy, [])
-            return soln
+            soln = tuple(self.strategy_guess.get(strategy, []))
+            if len(soln) > 0:
+                # Any solution of length 1 is a good one.
+                if len(soln) == 1:
+                    return soln
+                else:
+                    if min_results is None:
+                        min_results = len(soln)
+                    elif min_results > len(soln):
+                        min_results = len(soln)
+                    solutions.add(soln)
+
+        # Otherwise grab the shortest solution
+        for s in solutions:
+            if len(s) == min_results:
+                return s
         return []
 
     def asjson(self):
