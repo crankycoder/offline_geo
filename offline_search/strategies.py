@@ -3,7 +3,6 @@ import math
 
 class AbstractLocationFixStrategy(object):
 
-    # This is a duplicate of what is in SmartTile. Need to fix that.
     ZOOM_LEVEL = 18
 
     def __init__(self, locationFixer, prevStep):
@@ -43,14 +42,14 @@ class AbstractLocationFixStrategy(object):
         city_tiles = self.locationFixer.city_tiles
         tx, ty = city_tiles[tile_id]
 
-        # This shouldn't happen but it does.  Just skip this 
+        # This shouldn't happen but it does.  Just skip this
         # problem for now and come back to it later.
         if (tx, ty) == (None, None):
             raise StopIteration()
 
         for (x, y) in [(tx-1, ty-1), (tx, ty-1), (tx+1, ty-1),
                        (tx-1, ty), (tx+1, ty), (tx-1, ty+1),
-                       (tx, ty+1), (tx+1, ty+1),]:
+                       (tx, ty+1), (tx+1, ty+1)]:
             tmp_result = self.safe_city_tiles(x, y, city_tiles)
             if tmp_result is not None:
                 yield tmp_result
@@ -106,9 +105,6 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
         # Make a copy of previous data sets
         tile_points = locationSolution.get_soln_data(BasicLocationFix)
 
-        # Handy dandy shortcut
-        city_tiles = self.locationFixer.city_tiles
-
         # We have to solve a tie breaker
         assert len(tile_points) == 65535
 
@@ -124,8 +120,10 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
         if len(working_tileset) <= 1:
             return
 
+        """
         msg = "Tie breaker with score: [%d]! Highest scoring tiles: %s"
-        #print msg % (max_pts_in_tile, str(working_tileset))
+        print msg % (max_pts_in_tile, str(working_tileset))
+        """
 
         adj_tile_points = {}
 
@@ -134,13 +132,16 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
             for adjacent_tileid in self.adjacent_tile(tile):
                 new_pts = tile_points[adjacent_tileid]
                 if new_pts != 0:
+                    """
+                    city_tiles = self.locationFixer.city_tiles
                     msg = "Adding %d points from [%s](%d) to tile: %s(%d)"
                     msg_out = msg % (new_pts,
                                  city_tiles[adjacent_tileid],
                                  adjacent_tileid,
                                  city_tiles[tile],
                                  tile)
-                    #print msg_out
+                    print msg_out
+                    """
 
                     adj_tile_points[tile] = adj_tile_points.get(tile, 0)
                     adj_tile_points[tile] += new_pts

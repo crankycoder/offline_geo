@@ -9,7 +9,6 @@ Test this using test_fancy.py and nose.
 
 import json
 import datetime
-import math
 from os.path import abspath, expanduser
 import copy
 from marisa_trie import RecordTrie
@@ -80,7 +79,10 @@ class LocationFixer(object):
         minute.
         '''
 
-        soln = LocationSolution(self.offline_trie, fixTime, bssids)
+        soln = LocationSolution(self.offline_trie,
+                                self.city_tiles,
+                                fixTime,
+                                bssids)
         prev_strategy = None
 
         for strategy in self.strategies:
@@ -103,12 +105,13 @@ class LocationSolution(object):
     store well structured data. No particular constraints are
     implemented.
     """
-    def __init__(self, trie, fix_time, bssids):
+    def __init__(self, trie, city_tiles, fix_time, bssids):
         # These should be immutable constants
         self.trie = trie
         self.fixTime = fix_time
         # Make the BSSID list a tuple to force it to be immutable
         self.bssids = tuple(bssids)
+        self.city_tiles = city_tiles
 
         # This is a list of string names that orders simple to most
         # complex strategies
@@ -129,14 +132,12 @@ class LocationSolution(object):
 
         self.strategy_order.append(cls_name)
         self.strategy_solutions[cls_name] = data
+
         self.strategy_guess[cls_name] = best_guess
 
-    def best_guess(self):
-
+    def _best_guess(self):
         solutions = set()
-
         min_results = None
-
         for strategy in self.strategy_order:
             soln = tuple(self.strategy_guess.get(strategy, []))
             if len(soln) > 0:
@@ -157,48 +158,10 @@ class LocationSolution(object):
         return []
 
     def asjson(self):
-        return json.dumps({'city_tiles': self.best_guess()})
+        tile_ids = self._best_guess()
+
+        tile_coords = [self.city_tiles[t_id] for t_id in tile_ids]
+        return json.dumps({'city_tiles': tile_ids, 'tile_coord': tile_coords})
 
     def __str__(self):
         return self.asjson()
-
-
-class SmartTile(object):
-    """
-    A convenience class to convert to and from slippy tile
-    co-ordinates and lat/lon.
-    """
-    ZOOM_LEVEL = 18
-
-    @classmethod
-    def fromLatLon(cls, lat, lon):
-        xtile, ytile = SmartTile.deg2num(lat, lon, cls.ZOOM_LEVEL)
-        return SmartTile(xtile, ytile)
-
-    @classmethod
-    def fromTileXTileY(cls, xtile, ytile):
-        pass
-
-    def __init__(self, xtile, ytile):
-        self.xtile = xtile
-        self.ytile = ytile
-        self.lat, self.lon = SmartTile.num2deg(self.xtile,
-                                               self.ytile,
-                                               self.ZOOM_LEVEL)
-
-    @staticmethod
-    def deg2num(lat_deg, lon_deg, zoom):
-        lat_rad = math.radians(lat_deg)
-        n = 2.0 ** zoom
-        xtile = int((lon_deg + 180.0) / 360.0 * n)
-        ytile = int((1.0 - math.log(math.tan(lat_rad) +
-                    (1 / math.cos(lat_rad))) / math.pi) / 2.0 * n)
-        return (xtile, ytile)
-
-    @staticmethod
-    def num2deg(xtile, ytile, zoom):
-        n = 2.0 ** zoom
-        lon_deg = xtile / n * 360.0 - 180.0
-        lat_rad = math.atan(math.sinh(math.pi * (1 - 2 * ytile / n)))
-        lat_deg = math.degrees(lat_rad)
-        return (lat_deg, lon_deg)

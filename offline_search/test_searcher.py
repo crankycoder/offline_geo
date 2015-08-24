@@ -32,11 +32,13 @@ def test_basic_location_fix():
         elif len(data['city_tiles']) > 1:
             fuzzy_count += 1
 
-    tmpl = "Basic location fix rate: %0.2f"
-    print tmpl % (count * 1.0 / TOTAL_TORONTO_FIXTURES)
+    # 22% are a simple solution
+    rate = (count * 1.0 / TOTAL_TORONTO_FIXTURES)
+    assert "%0.2f" % rate == "0.22"
 
-    tmpl = "Basic location fuzzy fix rate: %0.2f"
-    print tmpl % (fuzzy_count * 1.0 / TOTAL_TORONTO_FIXTURES)
+    # 37% need disambiguation
+    rate = (fuzzy_count * 1.0 / TOTAL_TORONTO_FIXTURES)
+    assert "%0.2f" % rate == "0.37"
 
 
 def test_basic_plus_adjacent():
@@ -53,9 +55,8 @@ def test_basic_plus_adjacent():
         elif len(data['city_tiles']) > 1:
             fuzzy_count += 1
 
-    rate = (count * 1.0/ TOTAL_TORONTO_FIXTURES)
-    tmpl = "Basic+SimpleTieBreaker location fix rate: %0.2f" 
-    print tmpl % (count * 1.0 / TOTAL_TORONTO_FIXTURES)
-
-    tmpl = "Basic+SimpleTieBreaker location fuzzy fix rate: %0.2f" 
-    print tmpl % (fuzzy_count * 1.0 / TOTAL_TORONTO_FIXTURES)
+    # all 59% from the first test are disambiguated
+    # This seems a lot worse than you get in real life as
+    # we still don't take into account 'recent' fix solutions
+    rate = (count * 1.0 / TOTAL_TORONTO_FIXTURES)
+    assert ("%0.2f" % rate) == '0.59'
