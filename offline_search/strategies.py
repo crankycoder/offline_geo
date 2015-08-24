@@ -103,8 +103,6 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
         self.tile_points = [p for p in prevStep.tile_points]
         self.maxpt_tileset = copy.copy(prevStep.maxpt_tileset)
 
-        import pdb
-        pdb.set_trace()
         self.max_tilept = max(self.tile_points)
 
         # Handy dandy shortcut
@@ -114,15 +112,9 @@ class SimpleTieBreaker(AbstractLocationFixStrategy):
         # We have to solve a tie breaker
         if len(self.maxpt_tileset) <= 1:
             return
-        else:
-            # There are multiple tiles with scores
-            import pdb
-            pdb.set_trace()
 
         msg = "Tie breaker with score: [%d]! Highest scoring tiles: %s"
         print msg % (self.max_tilept, str(self.maxpt_tileset))
-        import pdb
-        pdb.set_trace()
 
         adj_tile_points = {}
 

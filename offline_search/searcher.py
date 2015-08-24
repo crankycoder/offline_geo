@@ -8,20 +8,20 @@ Test this using test_fancy.py and nose.
 """
 
 import json
-import os
 import datetime
-from demo import OrderedCityTiles
-from demo import num2deg
-from fixture_loader import fetch_bssids
-from marisa_trie import RecordTrie
-from strategies import BasicLocationFix
 import math
+from os.path import abspath, expanduser, islink, isabs
+from os.path import join, dirname
+import os
+
+from marisa_trie import RecordTrie
 
 DUPE_NUM = 3
 
+
 def offline_fix(trie, city_tiles, strategies, bssids):
     """
-    Setup an array of small integers (8bit) to map to all possible
+    Setup an array of small integers (16bit) to map to all possible
     tiles (64k).
 
     Fetch all set results from the trie for each found BSSID and
@@ -52,24 +52,11 @@ def offline_fix(trie, city_tiles, strategies, bssids):
     if solution.ok():
         return solution
 
-def adjacent_tile(tile_id):
-    city_tiles = load_city()
-    tx, ty = city_tiles[tile_id]
-
-    yield city_tiles[(tx-1, ty-1)]
-    yield city_tiles[(tx  , ty-1)]
-    yield city_tiles[(tx+1, ty-1)]
-
-    yield city_tiles[(tx-1, ty)]
-    yield city_tiles[(tx+1, ty)]
-
-    yield city_tiles[(tx-1, ty+1)]
-    yield city_tiles[(tx  , ty+1)]
-    yield city_tiles[(tx+1, ty+1)]
 
 def load_trie(trie_filename):
     fmt = ">" + ("i" * DUPE_NUM)
-    return RecordTrie(fmt).mmap(trie_filename)
+    l = abspath(expanduser(trie_filename))
+    return RecordTrie(fmt).mmap(l)
 
 class LocationFixer(object):
     """
