@@ -47,8 +47,8 @@ class OrderedCityTiles(object):
             try:
                 return self._hash_list[k]
             except:
-                print k
-                pass
+                return None, None
+
         if isinstance(k, tuple):
             # Return the integer tile_id
             return self._hash[k]
