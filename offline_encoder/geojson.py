@@ -1,5 +1,4 @@
 import json
-from matplotlib.path import Path
 
 
 def load_geojson(geojson_filename):
