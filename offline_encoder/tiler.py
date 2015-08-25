@@ -10,7 +10,6 @@ We use a SOBOL sequence to generate a large stream of random numbers.
 import csv
 
 # PyPI
-from numpy import bitwise_xor
 from sobol import i4_uniform
 
 # Custom stuff

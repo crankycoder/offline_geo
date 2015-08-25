@@ -1,4 +1,3 @@
-import os
 import struct
 
 _random_source = open("/dev/random", "rb")

@@ -7,5 +7,9 @@
 *.bssid
 
 toronto_bssid*.txt
+bin
 build
 bloom_toronto
+include
+lib
+man
