@@ -11,6 +11,7 @@ import json
 import datetime
 from os.path import abspath, expanduser
 import copy
+import hashlib
 from marisa_trie import RecordTrie
 
 DUPE_NUM = 3
@@ -110,7 +111,9 @@ class LocationSolution(object):
         self.trie = trie
         self.fixTime = fix_time
         # Make the BSSID list a tuple to force it to be immutable
-        self.bssids = tuple(bssids)
+
+        self.bssids = tuple([hashlib.sha256(b).hexdigest()[:12] for b in bssids])
+
         self.city_tiles = city_tiles
 
         # This is a list of string names that orders simple to most
