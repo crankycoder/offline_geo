@@ -3,6 +3,9 @@
 *.record_trie
 *.bytes_trie
 
+*.egg-info
+*.egg
+
 *.geojson
 *.bssid
 

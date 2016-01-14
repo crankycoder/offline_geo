@@ -1,5 +1,7 @@
 import csv
 
+ORDERED_CITY_CSV = 'outputs/ordered_city.csv'
+
 
 class OrderedCityTiles(object):
     '''
@@ -10,11 +12,12 @@ class OrderedCityTiles(object):
     def __init__(self, load_fromdisk=False):
         self._hash = {}
         self._hash_list = []
+
         if load_fromdisk:
-            with open('../outputs/incity_tiles.csv') as fin:
+            with open(ORDERED_CITY_CSV) as fin:
                 reader = csv.reader(fin)
-                for row in reader:
-                    t = (int(row[0].strip()), int(row[1].strip()))
+                for (tile_x, tile_y) in reader:
+                    t = (int(tile_x.strip()), int(tile_y.strip()))
                     self._hash_list.append(t)
                     self._hash[t] = len(self._hash_list) - 1
 
@@ -32,7 +35,7 @@ class OrderedCityTiles(object):
         for i, k in enumerate(self._hash_list):
             self._hash[k] = i
 
-        with open('ordered_city.csv', 'w') as fout:
+        with open(ORDERED_CITY_CSV, 'w') as fout:
             writer = csv.writer(fout)
             for item in self._hash_list:
                 writer.writerow(item)
@@ -64,7 +67,9 @@ class OrderedCityTiles(object):
         assert len(k) == 2
         assert isinstance(k[0], int)
         assert isinstance(k[1], int)
-        assert k not in self._hash
+        if k in self._hash:
+            # Skip this - we already added it
+            return
 
         self._hash_list.append(k)
         self._hash[k] = len(self._hash_list)-1

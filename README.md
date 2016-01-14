@@ -3,7 +3,6 @@ Generating a marisa trie to store BSSID data.
 
 Raw data sources:
 
-- GeoJSON shape of the city you need - input.geojson
 - Raw dump of (bssid, lat, lon) - input.csv
 
 Initial conversion of point data for input.csv must be done by a
