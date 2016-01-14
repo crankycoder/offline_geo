@@ -13,8 +13,6 @@ from os.path import isfile
 
 # Custom modules
 from devrand import randint
-from fileutil import file_len
-from geojson import load_geojson
 import tiler
 from slippytiles import num2deg, deg2num
 from polytools import PNPoly
@@ -47,7 +45,7 @@ class PrivateLocations(object):
 
     To create repeatable 'random' offsets for the BSSIDs over time, we
     also have two files per city which define a stable SOBOL sequence.
-    
+
     The first is defined in self.sobol_seq_csv which is a SOBOL
     sequence of numbers for a city.  This should be persistent for the
     lifetime that we generate new datasets for a city.
@@ -63,25 +61,8 @@ class PrivateLocations(object):
         # Always always always write big endian/network byte order
         self.fmt = ">" + ("i" * self.dupe_num)
 
-        # This is the file with the geojson encoded shapefile
-        # describing the outer boundary of the city scape.
-        # This boundary may include bodies of water. We don't really
-        # care.
-        self.geojson_fname = 'input.geojson'
-
-        # These are points that are outside of the polygon for the
-        # city
-        self.pnpoly_outside = 'pnpoly_outside.csv'
-
-        # These are points that are inside the polygon for the city
-        self.pnpoly_inside = 'pnpoly.csv'
-
         # This is a CSV file with (BSSID, lat, lon)
         self.bssid_input = 'input.csv'
-
-        # This is the pnpoly_inside file but the lat/lon have been
-        # converted into tile numbers at zoom level 18
-        self.pnpoly_tiles = 'pnpoly_tiles.csv'
 
         # This file contains the slippy tile coordinates and zoom
         # level for all tiles within the city shapefile boundaries.
@@ -119,102 +100,57 @@ class PrivateLocations(object):
         # The final record trie
         self.output_trie_fname = 'outputs/toronto.record_trie'
 
-    def _compute_pnpoly_set(self):
+    def compute_city_tiles(self):
         '''
-        Filter input.csv (bssid, lat, lon) down to just
-        the datapoints that lie within the polygon defined by
-        vertices.
+        Filter input.csv (bssid, lat, lon) through the osm tile
+        filter so that we can compute the set of tiles for a city.
+
+        The tileset *must* fit within 16bits (64k tiles).
+
+        If the tileset is too large, we :
+            * compute a bounding box around the total lat/lon set
+            * compute the center of the bounding box
+            * Compute total 2^16/# of actual tiles as N
+            * Scale the allowed longitudinal (horizontal) points from
+              the center point by sqrt(N*1.05)
+            * Scale the allowed latitude (vertical) points from
+              the center point by sqrt(N*1.05)
+            * Recalculate the tileset
         '''
 
-        # Load a polygon for the outer edge of the cityscape
-        v = load_geojson(self.geojson_fname)
-        self.polygon_filter = PNPoly(v)
+        # This code has been removed to simplify the entire process.
+        # Just assume everything fits into a 64k tiled space for now.
+        # If the actual number of tiles exceeds 64k, we'll
+        # just scale down the the number of tiles to fit.
 
-        # This splits all lat/lon points for BSSIDs into
-        # either within the polygon or outside the city polygon.
 
-        # TODO: This part is computationally expensive.
-        # This loop can be parallelized using multiprocessing
-        # and using a multiprocessing.Queue to collect data for
-        # each of of pnpoly_in and pnpoly_out datasets.
-
-        with open(self.pnpoly_outside, 'w') as fout_outsidepoly:
-            out_pnpoly_writer = csv.writer(fout_outsidepoly)
-            with open(self.pnpoly_inside, 'w') as fout:
-                in_pnpoly_writer = csv.writer(fout)
-                for (bssid, lat, lon) in csv.reader(open(self.bssid_input)):
-                    try:
-                        if self.polygon_filter.contains(float(lat), float(lon)):
-                            in_pnpoly_writer.writerow((bssid, lat, lon))
-                        else:
-                            out_pnpoly_writer.writerow((bssid, lat, lon))
-                    except:
-                        print "Can't handle: " + (lat, lon)
-
-    def _pnpoly_to_tiles(self):
-        # TODO: this can be optimised using multiprocessing
-        # and adding a multiprocessing.Queue to collect conversions
-        # of lat/lon to tile_id and writing out results into the
-        # output file.
-        with open(self.pnpoly_tiles, 'w') as f_out:
+        rows = 0
+        tile_set = set()
+        with open(self.incity_tiles, 'w') as f_out:
             writer = csv.writer(f_out)
-            with open(self.pnpoly_inside, 'r') as f_in:
+
+            with open(self.bssid_input, 'r') as f_in:
                 for i, row in enumerate(csv.reader(f_in)):
                     bssid = row[0]
                     lat = float(row[1])
                     lon = float(row[2])
                     tile_x, tile_y = deg2num(lat, lon, ZOOM_LEVEL)
-                    entry = (bssid, tile_x, tile_y)
+
                     entry = (bssid, tile_x, tile_y, ZOOM_LEVEL)
                     writer.writerow(entry)
 
-    def _compute_all_tiles_in_polygon(self):
-        '''
-        Compute the bounding box for the polygon containing the
-        city.
+                    tile_key = (tile_x, tile_y)
+                    tile_set.add(tile_key)
+                    rows += 1
 
-        Compute the tile ID at each of the corners
+        num_tiles = len(tile_set)
+        if num_tiles > 2**16:
+            # TODO: this is where we need to apply scaling.  For now,
+            # just abort early
+            raise RuntimeError("Too many tiles: [%d]" % num_tiles)
+        print "Total tileset size: %d" % num_tiles
 
-        Interpolate between 4 corners to get the list of all tiles in
-        the bounding box.
-
-        We then take each of the tiles in the bounding
-        box and compute the lat/lon of the center of the tile to
-        determine if the tile is 'in' the city boundaries.
-
-        The final set of tile information is written to a CSV file
-        defined in self.incity_tiles with the following format:
-
-        x, y, zoom level
-
-        Where x, y and z are defined with slippy tile zoom level 18.
-        '''
-        p1, p2 = self.polygon_filter.bounding_box()
-
-        tx0, ty0 = deg2num(p1[0], p1[1], ZOOM_LEVEL)
-        tx1, ty1 = deg2num(p2[0], p2[1], ZOOM_LEVEL)
-
-        # Now iterate over tx0 to tx1 at ty0
-        i = 0
-
-        tx_tiles = sorted([tx0, tx1])
-        ty_tiles = sorted([ty0, ty1])
-        total_tiles = (tx_tiles[1]-tx_tiles[0]+1) * (ty_tiles[1]-ty_tiles[0]+1)
-
-        # TODO: this can also be reworked using multiprocessing and a
-        # bunch of workers and a queue to handle writes to
-        # the disk.
-        with open(self.incity_tiles, 'w') as fout:
-            writer = csv.writer(fout)
-            for x in range(*tx_tiles):
-                for y in range(*ty_tiles):
-                    tile_pt = num2deg(x, y, ZOOM_LEVEL)
-                    if self.polygon_filter.contains(tile_pt[0], tile_pt[1]):
-                        writer.writerow((x, y, ZOOM_LEVEL))
-                    i += 1
-                    if i % 100 == 0:
-                        msg = "Processed %d out of %d tiles in polygon"
-                        print msg % (i, total_tiles)
+        self.total_city_tiles = num_tiles
 
     def _generate_bssid_sobol_keys(self):
         # Read in pnpoly_tiles.csv
@@ -377,16 +313,13 @@ class PrivateLocations(object):
     def generate_recordtrie(self):
         # This set of points roughly contains the Metro toronto area
 
-        self._compute_pnpoly_set()
-        self._pnpoly_to_tiles()
-        self._compute_all_tiles_in_polygon()
+        self.compute_city_tiles()
 
-        self.total_city_tiles = file_len(self.incity_tiles)
-        self._generate_bssid_sobol_keys()
+        #self._generate_bssid_sobol_keys()
 
-        self._obfuscate_tile_data()
+        #self._obfuscate_tile_data()
 
-        self._compute_tries()
+        #self._compute_tries()
 
 
 def main():
