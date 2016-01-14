@@ -1,6 +1,6 @@
 import csv
 
-ORDERED_CITY_CSV = 'outputs/ordered_city.csv'
+ORDERED_CITY_CSV = '../outputs/ordered_city.csv'
 
 
 class OrderedCityTiles(object):
@@ -9,12 +9,15 @@ class OrderedCityTiles(object):
     hashtable.
 
     '''
-    def __init__(self, load_fromdisk=False):
+    def __init__(self, load_fromdisk=False, fname=None):
         self._hash = {}
         self._hash_list = []
 
+        if fname is None:
+            fname = ORDERED_CITY_CSV
+
         if load_fromdisk:
-            with open(ORDERED_CITY_CSV) as fin:
+            with open(fname) as fin:
                 reader = csv.reader(fin)
                 for (tile_x, tile_y) in reader:
                     t = (int(tile_x.strip()), int(tile_y.strip()))

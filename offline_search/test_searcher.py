@@ -8,55 +8,21 @@ from searcher import offline_fix, load_trie
 from citytiles import OrderedCityTiles
 from fixture_loader import fetch_bssids
 import os
+from slippytiles import num2deg
 
 from strategies import BasicLocationFix, SimpleTieBreaker
 
-TOTAL_TORONTO_FIXTURES = 131
+ZOOM_LEVEL = 18
+TRIE = load_trie('tests/fixtures/newmarket.trie')
+CITY_TILES = OrderedCityTiles(load_fromdisk=True,
+                              fname='tests/fixtures/newmarket_ordered_city.csv')
 
-TRIE = load_trie('../outputs/toronto.record_trie')
-CITY_TILES = OrderedCityTiles(load_fromdisk=True)
 
-
-def test_basic_location_fix():
+def test_newmarket():
     strategies = [BasicLocationFix, ]
+    bssids = fetch_bssids('tests/fixtures/newmarket_fixtures.json')
+    soln = offline_fix(TRIE, CITY_TILES, strategies, bssids)
 
-    fuzzy_count = 0
-    count = 0
-    for fixture_filename in os.listdir('tests/fixtures'):
-        bssids = fetch_bssids('tests/fixtures/' + fixture_filename)
-        soln = offline_fix(TRIE, CITY_TILES, strategies, bssids)
-
-        data = json.loads(soln)
-        if len(data['city_tiles']) == 1:
-            count += 1
-        elif len(data['city_tiles']) > 1:
-            fuzzy_count += 1
-
-    # 22% are a simple solution
-    rate = (count * 1.0 / TOTAL_TORONTO_FIXTURES)
-    assert "%0.2f" % rate == "0.22"
-
-    # 37% need disambiguation
-    rate = (fuzzy_count * 1.0 / TOTAL_TORONTO_FIXTURES)
-    assert "%0.2f" % rate == "0.37"
-
-
-def test_basic_plus_adjacent():
-    strategies = [BasicLocationFix, SimpleTieBreaker]
-
-    fuzzy_count = 0
-    count = 0
-    for fixture_filename in os.listdir('tests/fixtures'):
-        bssids = fetch_bssids('tests/fixtures/' + fixture_filename)
-        soln = offline_fix(TRIE, CITY_TILES, strategies, bssids)
-        data = json.loads(soln)
-        if len(data['city_tiles']) == 1:
-            count += 1
-        elif len(data['city_tiles']) > 1:
-            fuzzy_count += 1
-
-    # all 59% from the first test are disambiguated
-    # This seems a lot worse than you get in real life as
-    # we still don't take into account 'recent' fix solutions
-    rate = (count * 1.0 / TOTAL_TORONTO_FIXTURES)
-    assert ("%0.2f" % rate) == '0.59'
+    # Just pick the first solution
+    tile_x, tile_y = json.loads(soln)['tile_coord'][0]
+    assert (44.06785366935761, -79.5025634765625) == num2deg(tile_x, tile_y, ZOOM_LEVEL)
