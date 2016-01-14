@@ -14,8 +14,7 @@ from os.path import isfile
 # Custom modules
 from devrand import randint
 import tiler
-from slippytiles import num2deg, deg2num
-from polytools import PNPoly
+from slippytiles import deg2num
 from citytiles import OrderedCityTiles
 
 # PyPI stuff
@@ -62,7 +61,7 @@ class PrivateLocations(object):
         self.fmt = ">" + ("i" * self.dupe_num)
 
         # This is a CSV file with (BSSID, lat, lon)
-        self.bssid_input = 'input.csv'
+        self.bssid_input = 'inputs/input.csv'
 
         # This file contains the slippy tile coordinates and zoom
         # level for all tiles within the city shapefile boundaries.
@@ -98,9 +97,9 @@ class PrivateLocations(object):
         self.bssid_sobol_obfuscated_csv = 'outputs/obfuscated.csv'
 
         # The final record trie
-        self.output_trie_fname = 'outputs/toronto.record_trie'
+        self.output_trie_fname = 'outputs/area.record_trie'
 
-    def compute_city_tiles(self):
+    def _compute_city_tiles(self):
         '''
         Filter input.csv (bssid, lat, lon) through the osm tile
         filter so that we can compute the set of tiles for a city.
@@ -122,7 +121,6 @@ class PrivateLocations(object):
         # Just assume everything fits into a 64k tiled space for now.
         # If the actual number of tiles exceeds 64k, we'll
         # just scale down the the number of tiles to fit.
-
 
         rows = 0
         tile_set = set()
@@ -304,14 +302,9 @@ class PrivateLocations(object):
         print "trie saved!"
 
     def generate_recordtrie(self):
-        # This set of points roughly contains the Metro toronto area
-
-        self.compute_city_tiles()
-
+        self._compute_city_tiles()
         self._generate_bssid_sobol_keys()
-
         self._obfuscate_tile_data()
-
         self._compute_tries()
 
 
