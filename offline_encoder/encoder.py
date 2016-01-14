@@ -8,7 +8,6 @@ a record trie for BSSID data.
 # Standard library
 import csv
 
-from os import unlink
 from os.path import isfile
 
 # Custom modules
@@ -20,6 +19,7 @@ from citytiles import OrderedCityTiles
 # PyPI stuff
 from marisa_trie import RecordTrie
 
+import hashlib
 
 # Never change this unless you've thought about it 97 times.
 # Then still never change it.
@@ -159,13 +159,15 @@ class PrivateLocations(object):
         # random numbers assigned into it so it's important
         # to keep the bssid_sobol_idx.csv file around for the
         # next iteration of the tile generation.
+
+        if isfile(self.bssid_sobol_idx_csv):
+            print "!!!  SOBOL data already exists. Not regenerating it."
+            return
+
         max_idx = tiler.write_sobol_seq(self.sobol_seq_csv,
                                         self.sobol_seed,
                                         self.total_city_tiles)
 
-        if isfile(self.bssid_sobol_idx_csv):
-            print "Clobbering the existing %s file" % self.bssid_sobol_idx_csv
-            unlink(self.bssid_sobol_idx_csv)
 
         with open(self.bssid_sobol_idx_csv, 'w') as file_out:
             writer = csv.writer(file_out)
@@ -247,12 +249,13 @@ class PrivateLocations(object):
                         norm_tile_id = (tile_delta + next_sobol_tile_id) % ordered_city_tiles.size()
 
                         norm_tile_x, norm_tile_y, = ordered_city_tiles[norm_tile_id]
-                        r = (bssid, norm_tile_x, norm_tile_y, zlevel)
+                        # r = (bssid, norm_tile_x, norm_tile_y, zlevel)
+                        r = (hashlib.sha256(bssid).hexdigest()[:12], norm_tile_x, norm_tile_y, zlevel)
 
                         writer.writerow(r)
                         obfuscated_count += 1
                         if obfuscated_count % 10000 == 0:
-                            print "Wrote %d rows of obfuscated data" % obfuscated_count
+                            print "Wrote %d rows of obfuscated bssid data with dupliates" % obfuscated_count
 
     def _load_city(self):
         """
